@@ -1,0 +1,28 @@
+{
+    "name": "toknot/date",
+    "description": "date for php",
+    "keywords": ["framework", "php","toknot","date"],
+    "homepage": "http://toknot.com",
+    "license": "BSD-3-Clause",
+    "version" : "0.1",
+    "authors": [
+        {
+            "name": "Szopen Xiao",
+            "email": "xiao@toknot.com",
+            "homepage": "http://toknot.com",
+            "role": "Founder"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/chopins/date/issues?state=open",
+        "source": "https://github.com/chopins/date"
+    },
+    "require": {
+        "php": ">=7.0.0"
+    },
+    "autoload" : {
+        "psr-4": {
+            "Toknot\\Date\\": "src/"
+        }
+    }
+}

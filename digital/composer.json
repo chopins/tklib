@@ -1,0 +1,34 @@
+{
+    "name": "toknot/digital",
+    "description": "A php framework",
+    "keywords": ["framework", "php","toknot","digital","number","math"],
+    "homepage": "http://toknot.com",
+    "license": "BSD-3-Clause",
+    "version" : "0.1",
+    "authors": [
+        {
+            "name": "Szopen Xiao",
+            "email": "xiao@toknot.com",
+            "homepage": "http://toknot.com",
+            "role": "Founder"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/chopins/digital/issues?state=open",
+        "source": "https://github.com/chopins/digital"
+    },
+    "minimum-stability": "dev",
+    "require": {
+        "php": ">=7.0.0",
+        "toknot/misc" : "*"
+    },
+    "suggest" : {
+        "ext-gmp" : "GNU Multiple Precision",
+        "ext-bcmath" : "BCMath Arbitrary Precision Mathematics"
+    },
+    "autoload" : {
+        "psr-4": {
+            "Toknot\\Digital\\": "src/"
+        }
+    }
+}
