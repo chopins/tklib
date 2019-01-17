@@ -1,0 +1,33 @@
+{
+    "name": "toknot/process",
+    "description": "process for php",
+    "keywords": ["framework", "php","toknot","date"],
+    "homepage": "http://toknot.com",
+    "license": "BSD-3-Clause",
+    "version" : "0.1",
+    "authors": [
+        {
+            "name": "Szopen Xiao",
+            "email": "xiao@toknot.com",
+            "homepage": "http://toknot.com",
+            "role": "Founder"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/chopins/input/issues?state=open",
+        "source": "https://github.com/chopins/input"
+    },
+    "minimum-stability": "dev",
+    "require": {
+        "php": ">=7.0.0",
+        "ext-pcntl" : "*",
+        "ext-posix" : "*",
+        "toknot/input" : "*",
+        "toknot/date" : "*"
+    },
+    "autoload" : {
+        "psr-4": {
+            "Toknot\\Input\\": "src/"
+        }
+    }
+}
