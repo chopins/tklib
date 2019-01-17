@@ -12,8 +12,9 @@ namespace Toknot\Digital;
 
 class Chinese {
     protected $zhnum = '';
-
-    public function __construct($number) {
+    protected $zht = false;
+    public function __construct($number, $zht = false) {
+        $this->zht = $zht;
         $this->zhnum = $this->number2zh($number);
     }
 
@@ -27,17 +28,20 @@ class Chinese {
 
     protected function number2zh($number) {
         $numberTable = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+        $numberTTable = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
         $unitTable = ['十', '百', '千', '万', '亿'];
+        $unitTTable = ['拾', '佰', '仟', '万', '亿'];
         $sign = $number < 0 ? '负' : '';
         $number = abs($number);
         $dot = '点';
-        return $sign . $this->number2Word($number, $numberTable, $unitTable, $sign, $dot);
+        return $this->number2Word($number, $this->zht ? $numberTTable : $numberTable,
+                 $this->zht ? $unitTTable :$unitTable, $sign, $dot);
     }
 
-    protected function number2Word($number, $numberTable, $unitTable, $dot) {
+    protected function number2Word($number, $numberTable, $unitTable, $sign, $dot) {
         $p = explode('.', $number);
 
-        $int = $this->addUnit($p[0], $numberTable, $unitTable);
+        $int = $sign.$this->addUnit($p[0], $numberTable, $unitTable);
 
         $dec = '';
         if (isset($p[1])) {
@@ -74,10 +78,10 @@ class Chinese {
             $n = $sn{$i};
             $number = $table[$n];
 
-            if ($u < 0 && $number != $table[0]) {
+            if ($u < 0 && $n != 0) {
                 $res .= $number;
             } else {
-                if ($number == $table[0]) {
+                if ($n == 0) {
                     $iszero++;
                     $iszero === 1 && $i != ($len - 1) && $res .= $table[0];
                 } else {
@@ -92,14 +96,14 @@ class Chinese {
                 $res .= $number . $unit;
             }
         }
-        return $res;
+        
+        return rtrim($res, $table[0]);
     }
 
     protected function convertDecimal($number, $table, $dot) {
         $rs = $dot;
         $len = strlen($number);
         $iszero = 0;
-
         for ($i = 0; $i < $len; $i++) {
             $k = intval($number{$i});
             if ($k == 0) {
