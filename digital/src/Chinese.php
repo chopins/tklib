@@ -14,6 +14,9 @@ class Chinese {
     protected $zhnum = '';
     protected $zht = false;
     public function __construct($number, $zht = false) {
+        if(!\is_numeric($number)) {
+            throw new \Exception('paramter 1 must be a numeric');
+        }
         $this->zht = $zht;
         $this->zhnum = $this->number2zh($number);
     }
