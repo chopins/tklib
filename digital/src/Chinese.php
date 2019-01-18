@@ -13,6 +13,19 @@ namespace Toknot\Digital;
 class Chinese {
     protected $zhnum = '';
     protected $zht = false;
+
+    /**
+     * convert arabic numerals to chinese numerals
+     * 
+     * <code>
+     * echo new Chinese(23343);  //二万三千三百四十三
+     * echo new Chinese(21423, true); //贰万壹仟肆佰贰拾叁
+     * $ch = new Chinese(83242, true);
+     * echo $ch->getZhnum(); //捌万叁仟贰佰肆拾二
+     * </code>
+     * @param number $number   a number
+     * @param bool   $zht	   whether use capital number of chinese
+     */
     public function __construct($number, $zht = false) {
         if(!\is_numeric($number)) {
             throw new \Exception('paramter 1 must be a numeric');
@@ -21,6 +34,14 @@ class Chinese {
         $this->zhnum = $this->number2zh($number);
     }
 
+    public static function convert($number, $zht = false) {
+        $s = new static($number, $zht);
+        return $s->getZhnum();
+    }
+
+    /**
+     * get chinese number string
+     */
     public function getZhnum() {
         return $this->zhnum;
     }

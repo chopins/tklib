@@ -55,6 +55,10 @@ class Byte
     /**
      * convert byte number to human byte info
      * 
+     * <cod>
+     * Byte::toHuman('21542121314', 2, ' '); //20吉字节 64兆字节 171千字节 866字节
+     * </code>
+     * 
      * @param number $byte
      * @param int $base	        base 10 is 1000 bytes, base 2 is 1024 bytes
      * @param mixed $getString    passed false return array, else return string, is not bool will be set for boundary string
@@ -92,9 +96,15 @@ class Byte
     }
 
     /**
+     * convert byte string to byte number
      * 
-     * @param  string $string
+     * <code>
+     * echo Byte::toByte('2GB 32MB'); //2181038080
+     * </code>
+     * 
+     * @param  string  $string
      * @param  int      $base  value 2 is base 2 for 1024 bytes, 10 is base 10 for 1000 bytes
+     * @return number  
      */
     public static function toByte($string, $base = 2)
     {
