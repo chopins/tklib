@@ -16,6 +16,12 @@ class Math
 
     private static $intMaxLen = [];
 
+    protected static function checkParameter($op1, $op2) {
+        if(!\is_numeric($op1) || !\is_numeric($op2)) {
+            throw new \Exception("parameter (#1 $op1, #2$op2) must be numeric");
+        }
+    }
+
     /**
      * check give params whether is interger number or digital string
      *
@@ -90,6 +96,7 @@ class Math
      */
     public static function mul($op1, $op2)
     {
+        self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('mul');
         return $f === false ? $op1 * $op2 : $f($op1, $op2);
     }
@@ -129,6 +136,7 @@ class Math
      */
     public static function add($op1, $op2)
     {
+        self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('add');
         if ($f === false) {
             return self::operIsBig($op1, $op2) ? self::decAdd($op1, $op2) : $op1 + $op2;
@@ -146,6 +154,7 @@ class Math
      */
     public static function sub($op1, $op2)
     {
+        self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('sub');
         if ($f === false) {
             return self::operIsBig($op1, $op2) ? self::decSub($op1, $op2) : $op1 - $op2;
@@ -162,6 +171,7 @@ class Math
      */
     public static function div($op1, $op2)
     {
+        self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('div');
         if ($f == false) {
             return self::operIsBig($op1, $op2) ? self::decDiv($op1, $op2) : $op1 / $op2;
@@ -177,6 +187,7 @@ class Math
      */
     public static function mod($op1, $op2)
     {
+        self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('mod');
         if ($f === false) {
             return self::operIsBig($op1, $op2) ? self::decDiv($op1, $op2, $mod) : $op1 % $op2;
@@ -193,6 +204,7 @@ class Math
      */
     public static function pow($op1, $op2)
     {
+        self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('pow');
         return $f === false ? $op1 ** $op2 : $f($op1, $op2);
     }
@@ -206,6 +218,7 @@ class Math
      */
     public static function andOp($left, $right)
     {
+        self::checkParameter($left, $right);
         $f         = self::checkMathFunc('and');
         $bignumber = $f || self::operIsBig($left, $right);
         if ($f) {
@@ -228,6 +241,7 @@ class Math
      */
     public static function orOp($left, $right)
     {
+        self::checkParameter($left, $right);
         $f         = self::checkMathFunc('or');
         $bignumber = $f || self::operIsBig($left, $right);
         if ($f) {
@@ -304,7 +318,7 @@ class Math
 
     protected static function operIsBig($op1, $op2)
     {
-        return (self::isBigInt($left) || self::isBigInt($right));
+        return (self::isBigInt($op1) || self::isBigInt($op2));
     }
 
     /**

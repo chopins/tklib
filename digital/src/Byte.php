@@ -8,7 +8,7 @@
  */
 namespace Toknot\Digital;
 
-use Toknot\Math;
+use Toknot\Digital\Math;
 
 class Byte
 {
@@ -24,55 +24,92 @@ class Byte
 
     protected static function math(&$byte, $op)
     {
-        $rb   = floor(Math::div($byte, self::PB));
-        $byte = Math::sub($byte, Math::mul($rpb, $op));
+        $rb   = floor(Math::div($byte, $op));
+        $byte = Math::sub($byte, Math::mul($rb, $op));
         return $rb;
     }
 
-    protected static function getBytes($unit = '')
+    protected static function checkBase($base) {
+        if($base != 2 || $base != 10) {
+            throw new \Exception('base only 2 or 10');
+        }
+    }
+
+    protected static function getBytes($unit = '', $base = 2)
     {
         if(empty($unit)) {
             return 1;
         }
         $unit = strtoupper($unit);
-        if (!in_array($unit, self::$unit)) {
+        if (false === ($idx = array_search($unit, self::$unit, true))) {
             throw new \Exception("passed unknown byte unit '$unit'");
+        }
+        if($base == 10) {
+            return Math::pow(1000, $idx + 1);
         }
         return constant("\Toknot\Digital\Byte::{$unit}B");
     }
 
-    public static function toHuman($byte)
+    /**
+     * convert byte number to human byte info
+     * 
+     * @param number $byte
+     * @param int $base	        base 10 is 1000 bytes, base 2 is 1024 bytes
+     * @param mixed $getString    passed false return array, else return string, is not bool will be set for boundary string
+     * @param bool $isIEC	    true will use KiB, true use KB
+     * @return mixed	 if $getString is not false will return array, string otherwise
+     */
+    public static function toHuman($byte, $base = 2, $getString = false, $isIEC = true)
     {
         $pb = $tb = $gb = $mb = $kb = 0;
         if (!Math::isInteger($byte)) {
             throw new \Exception('must give integer digital or integer string, donot pass float digital');
         }
+        self::checkBase($base);
         $res   = [];
         $start = count(self::$unit) - 1;
-        for ($i = $start; $i >= 0; $i++) {
-            $defByte = self::getBytes(self::$unit[$i]);
+        for ($i = $start; $i >= 0; $i--) {
+            $defByte = self::getBytes(self::$unit[$i], $base);
             if ($byte > $defByte) {
                 $res[self::$unit[$i]] = self::math($byte, $defByte);
             }
         }
+        if($getString !== false) {
+            $var = '';
+            $prefix = $isIEC ? 'iB' : 'B';
+            $sep = \is_string($getString) ? $getString : '';
+            foreach($res as $u => $v) {
+                $var .= "{$v}{$u}{$prefix}{$sep}";
+            }
+            return "{$var}{$byte}{$prefix}";
+        }
+        $res['B']  = $byte;
         return $res;
     }
 
-    public static function toByte($string)
+    /**
+     * 
+     * @param  string $string
+     * @param  int      $base  value 2 is base 2 for 1024 bytes, 10 is base 10 for 1000 bytes
+     */
+    public static function toByte($string, $base = 2)
     {
+        self::checkBase($base);
         if (!preg_match_all('/([\d]+)(\s*)([PTGMK])(iB|B|)\s*/', $string, $matches)) {
             return 0;
         }
         $number = $matches[1];
         $unit   = $matches[3];
-        $res    = '';
+
+        $res    = 0;
         $end = count($unit) - 1;
         foreach ($number as $i => $v) {
-            $unit = $unit[$i];
-            if($i != $end && empty($unit)) {
+            $numUnit = $unit[$i];
+            if($i != $end && empty($numUnit)) {
                 throw new \Exception('give data size string of format error');
             }
-            $res += Math::mul($v, self::getBytes($unit));
+            $bytes = self::getBytes($numUnit, $base);
+            $res = Math::add($res,Math::mul($v, $bytes));
         }
         return $res;
     }
