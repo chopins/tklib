@@ -142,7 +142,7 @@ class Date
                 }
             }
         }
-        return \mkdir($timepart[0], $timepart[1], $timepart[2], $timepart[3], $timepart[4], $timepart[5]);
+        return \mktime($timepart[0], $timepart[1], $timepart[2], $timepart[3], $timepart[4], $timepart[5]);
     }
 
     /**
