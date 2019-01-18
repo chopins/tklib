@@ -21,6 +21,8 @@ class Byte
     const ZB             = '1180591620717411303424';
     const YB             = '1208925819614629174706176';
     private static $unit = ['K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
+    private static $zhunit = ['K' =>'千', 'M' => '兆', 'G' => '吉', 'T' => '太', 'P' => '拍', 'E' => '艾', 'Z' => '泽' , 'Y' => '尧'];
+    public static $isZh = false;
 
     protected static function math(&$byte, $op)
     {
@@ -77,8 +79,10 @@ class Byte
         if($getString !== false) {
             $var = '';
             $prefix = $isIEC ? 'iB' : 'B';
+            $prefix = self::$isZh ? '字节' : $prefix;
             $sep = \is_string($getString) ? $getString : '';
             foreach($res as $u => $v) {
+                $u = self::$zhunit[$u];
                 $var .= "{$v}{$u}{$prefix}{$sep}";
             }
             return "{$var}{$byte}{$prefix}";

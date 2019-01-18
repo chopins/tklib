@@ -10,7 +10,7 @@ namespace Toknot\Digital;
 
 class Math
 {
-    private static $funcStatus = null;
+    private static $mathFunc = [];
     private static $anyMath    = false;
     const BASE_TABLE           = [0 => 0, 1 => 1, 2 => 2, 3 => 3, 4 => 4, 5 => 5, 6 => 6, 7 => 7, 8 => 8, 9 => 9, 'a' => 10, 'b' => 11, 'c' => 12, 'd' => 13, 'e' => 14, 'f' => 15, 'g' => 16, 'h' => 17, 'i' => 18, 'j' => 19, 'k' => 20, 'l' => 21, 'm' => 22, 'n' => 23, 'o' => 24, 'p' => 25, 'q' => 26, 'r' => 27, 's' => 28, 't' => 29, 'u' => 30, 'v' => 31, 'w' => 32, 'x' => 33, 'y' => 34, 'z' => 35];
 
@@ -63,27 +63,44 @@ class Math
         return self::$intMaxLen[$base];
     }
 
+    public static function comp($op1, $op2) {
+        self::checkParameter($op1, $op2);
+        $f = self::checkMathFunc('comp', 'cmp');
+        if(!$f) {
+            return $f($op1, $op2);
+        }
+        if($op1 == $op2) {
+            return 0;
+        } elseif($op1 > $op2) {
+            return 1;
+        } elseif($op1 < $op2) {
+            return -1;
+        }
+    }
+
     /**
      * check use function, check order is gmp, bc
      *
      * @param string $func
      * @return boolean|string
      */
-    public static function checkMathFunc($func)
+    public static function checkMathFunc($func, $gmpFunc = null)
     {
-        if (self::$funcStatus) {
-            return self::$funcStatus . $func;
-        } elseif (self::$funcStatus === false) {
+        if (!empty(self::$mathFunc[$func])) {
+            return self::$mathFunc;
+        } elseif (isset(self::$mathFunc[$func]) && self::$mathFunc[$func] === false) {
             return false;
         }
         if (function_exists("bc{$func}")) {
-            self::$funcStatus = 'bc';
-            return "bc{$func}";
-        } elseif (function_exists("gmp_{$func}")) {
-            self::$funcStatus = 'gmp_';
-            return "gmp_{$func}";
+            self::$mathFunc[$func] = "bc{$func}";
+            return self::$mathFunc[$func];
         }
-        self::$funcStatus = false;
+
+        if (function_exists("gmp_{$func}")) {
+            self::$mathFunc[$func] = $gmpFunc === null ? "gmp_{$func}" : "gmp_{$gmpFunc}";
+            return self::$mathFunc[$func];
+        }
+        self::$mathFunc[$func] = false;
         return false;
     }
 
