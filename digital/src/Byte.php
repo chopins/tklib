@@ -30,7 +30,7 @@ class Byte
     }
 
     protected static function checkBase($base) {
-        if($base != 2 || $base != 10) {
+        if($base != 2 && $base != 10) {
             throw new \Exception('base only 2 or 10');
         }
     }
