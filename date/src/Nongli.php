@@ -15,7 +15,7 @@ class Nongli
 {
     const MONTH_ZH_NAME   = [1 => '正', 11 => '冬', 12 => '腊'];
     const DAY_ZH_PREFIX   = '初';
-    const MONTH_ZH_LEAP = '闰';
+    const MONTH_ZH_LEAP   = '闰';
     const NONGLI_MAX_YEAR = 2100;
     const NONGLI_START    = [1, 1];
     const NONGLI_END      = [12, 1];
@@ -29,6 +29,7 @@ class Nongli
         '壬子', '癸丑', '甲寅', '乙卯', '丙辰', '丁巳', '戊午', '己未', '庚申', '辛酉', '壬戌', '癸亥'];
 
     //本数据基于香港天文台数据(https://www.hko.gov.hk/gts/time/conversionc.htm)
+    //第0个数据基于网上数据填充
     const NONGLI_MAP = [0x4bd8, 0x4ae0, 0xa570, 0x54d5, 0xd260, 0xd950, 0x16554, 0x56a0, 0x9ad0, 0x55d2,
         0x4ae0, 0xa5b6, 0xa4d0, 0xd250, 0x1d255, 0xb540, 0xd6a0, 0xada2, 0x95b0, 0x14977,
         0x4970, 0xa4b0, 0xb4b5, 0x6a50, 0x6d40, 0x1ab54, 0x2b60, 0x9570, 0x52f2, 0x4970,
@@ -50,18 +51,32 @@ class Nongli
         0xb273, 0x6930, 0x7337, 0x6aa0, 0xad50, 0x14b55, 0x4b60, 0xa570, 0x54e4, 0xd160,
         0xe968, 0xd520, 0xdaa0, 0x16aa6, 0x56d0, 0x4ae0, 0xa9d4, 0xa2d0, 0xd150, 0xf252,
         0xd520];
-    private $year       = 0;
-    private $month      = 0;
-    private $day        = 0;
-    private $dayNum     = 0;
-    private $yearData   = 0;
-    private $toDays     = 0;
-    private $nongliDate = [];
-    private $time = 0;
-    private $tradition = false;
-    protected $srcDate = 0;
+    private $year            = 0;
+    private $month           = 0;
+    private $day             = 0;
+    private $dayNum          = 0;
+    private $yearData        = 0;
+    private $toDays          = 0;
+    private $nongliDate      = [];
+    private $time            = 0;
+    private $tradition       = false;
+    protected $srcDate       = 0;
+    protected $startYearDays = 0;
+
+    public function __construct()
+    {
+        $this->startYearDays = date('z', strtotime(\implode('-', self::YEAR_START)));
+    }
 
     /**
+     * Get between 1900-01-31 -- 2100-12-31 date of Chinese Nongli
+     *
+     * <code>
+     * $nongli = new Nongli;
+     * $res = $nongli->getDay('1900-03-20');
+     * echo $res['nl']; //庚子年二月二十
+     * </code>
+     *
      * @param string $day
      * @return array  the value keys within this array are :
      *              gd:  date string
@@ -76,7 +91,7 @@ class Nongli
     public function getDay($day, $tradition = false)
     {
         $this->srcDate = $day;
-        $this->time = \strtotime($day);
+        $this->time    = \strtotime($day);
         if ($this->time === false) {
             throw new \Exception('give time error');
         }
@@ -88,23 +103,23 @@ class Nongli
     protected function getNongliDay()
     {
         $this->loopAllData();
-        $dateData = [];
+        $dateData       = [];
         $dateData['gd'] = date('Y-m-d', $this->time);
         $dateData['ut'] = $this->time;
-        $dateData['gc'] = ['y' => $this->year, 'm'=>$this->month, 'd' => $this->day];
-        
+        $dateData['gc'] = ['y' => $this->year, 'm' => $this->month, 'd' => $this->day];
+
         $monthName = Chinese::convert($this->nongliDate[1], false, true);
-        $month = $this->nongliDate[3] == 1 ? self::MONTH_ZH_LEAP . $monthName : $monthName;
-        if($this->tradition && isset(self::MONTH_ZH_NAME[$this->nongliDate[1]])) {
+        $month     = $this->nongliDate[3] == 1 ? self::MONTH_ZH_LEAP . $monthName : $monthName;
+        if ($this->tradition && isset(self::MONTH_ZH_NAME[$this->nongliDate[1]])) {
             $month = self::MONTH_ZH_NAME[$this->nongliDate[1]];
         }
         $day = Chinese::convert($this->nongliDate[2], false, 2);
-        if($this->nongliDate[2] < 11) {
+        if ($this->nongliDate[2] < 11) {
             $day = self::DAY_ZH_PREFIX . $day;
         }
-        $ganzhi = self::GANZHI_MAP[$this->nongliDate[0]];
-        $dateData['nl'] = "{$ganzhi}年{$month}月{$day}";
-        $dateData['nd'] = ['y' => $ganzhi, 'm' => $month, 'd' => $day];
+        $ganzhi          = self::GANZHI_MAP[$this->nongliDate[0]];
+        $dateData['nl']  = "{$ganzhi}年{$month}月{$day}";
+        $dateData['nd']  = ['y' => $ganzhi, 'm' => $month, 'd' => $day];
         $dateData['ndn'] = ['y' => $this->nongliDate[0], 'm' => $this->nongliDate[1], 'd' => $this->nongliDate[2], 'l' => $this->nongliDate[3]];
         return $dateData;
     }
@@ -115,18 +130,17 @@ class Nongli
         for ($i = self::YEAR_START[0]; $i < $this->year; $i++) {
             $days += ((($i % 4 === 0 && $i % 100 !== 0) || $i % 400 === 0) ? 366 : 365);
         }
-        $this->toDays = $days + $this->dayNum - self::YEAR_START[2] + 1;
+        $this->toDays = $days + $this->dayNum - $this->startYearDays;
     }
 
     protected function setDayInfo()
     {
-        list($this->year, $this->month, $this->day, $this->dayNum) = explode(' ', date('Y j n z', $this->time));
-
+        list($this->year, $this->month, $this->day, $this->dayNum) = explode(' ', date('Y n j z', $this->time));
         if ($this->year > self::YEAR_END[0] || $this->year < self::YEAR_START[0]
-             || ($this->year == self::YEAR_START[0] && ($this->month < self::YEAR_START[1] || $this->day < self::YEAR_START[2]))) {
-                 $start = \implode('-',  self::YEAR_START);
-                 $end = \implode('-', self::YEAR_END);
-            throw new \Exception("give date({$this->srcDate}) out of range, must between  $start -- $end ");
+            || ($this->year == self::YEAR_START[0] && $this->dayNum < $this->startYearDays)) {
+            $start = \implode('-', self::YEAR_START);
+            $end   = \implode('-', self::YEAR_END);
+            throw new \Exception("give date({$this->srcDate}) out of range, must between  $start -- $end (contain the start and end date)");
         }
         $this->dayNum += 1;
         $this->calToYearDays();
@@ -169,12 +183,12 @@ class Nongli
             } elseif ($i !== 0) {
                 $startDay = 0;
             }
-            if($this->setNongliDate($i, $m, $yd, $endDays, $yearOffset, 0)) {
+            if ($this->setNongliDate($i, $m, $yd, $endDays, $yearOffset, 0)) {
                 break;
             }
 
-            if ($leapMonth == $i) {   
-                if($this->setNongliDate($i,$leapMonthDay, $yd, $endDays, $yearOffset, 1)) {
+            if ($leapMonth == $i) {
+                if ($this->setNongliDate($i, $leapMonthDay, $yd, $endDays, $yearOffset, 1)) {
                     break;
                 }
             }
@@ -183,11 +197,12 @@ class Nongli
         return $yd;
     }
 
-    protected function setNongliDate($month, $mDay, &$yd, &$endDays, $yearOffset, $leap) {
+    protected function setNongliDate($month, $mDay, &$yd, &$endDays, $yearOffset, $leap)
+    {
         if ($mDay > $endDays) {
             $ganzhi           = $this->calGanzhi($yearOffset);
             $this->nongliDate = [$ganzhi, $month, $endDays, $leap];
-            $yd+=$mDay;
+            $yd += $mDay;
             return 1;
         } else {
             $endDays -= $mDay;
@@ -196,7 +211,8 @@ class Nongli
         return 0;
     }
 
-    protected function calGanzhi($yearOffset) {
+    protected function calGanzhi($yearOffset)
+    {
         return $yearOffset == 0 ? self::GANZHI_START : (self::GANZHI_START + $yearOffset) % 60;
     }
 
