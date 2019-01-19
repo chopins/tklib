@@ -17,9 +17,9 @@ class Nongli
     const DAY_ZH_PREFIX   = '初';
     const MONTH_ZH_LEAP = '闰';
     const NONGLI_MAX_YEAR = 2100;
-    const NONGLI_START    = [11, 11];
+    const NONGLI_START    = [1, 1];
     const NONGLI_END      = [12, 1];
-    const YEAR_START      = [1901, 1, 1];
+    const YEAR_START      = [1900, 1, 31];
     const YEAR_END        = [2100, 12, 31];
     const GANZHI_START    = 36;
     const GANZHI_MAP      = ['甲子', '乙丑', '丙寅', '丁卯', '戊辰', '己巳', '庚午', '辛未', '壬申', '癸酉', '甲戌', '乙亥',
@@ -29,7 +29,7 @@ class Nongli
         '壬子', '癸丑', '甲寅', '乙卯', '丙辰', '丁巳', '戊午', '己未', '庚申', '辛酉', '壬戌', '癸亥'];
 
     //本数据基于香港天文台数据(https://www.hko.gov.hk/gts/time/conversionc.htm)
-    const NONGLI_MAP = [0x10, 0x4ae0, 0xa570, 0x54d5, 0xd260, 0xd950, 0x16554, 0x56a0, 0x9ad0, 0x55d2,
+    const NONGLI_MAP = [0x4bd8, 0x4ae0, 0xa570, 0x54d5, 0xd260, 0xd950, 0x16554, 0x56a0, 0x9ad0, 0x55d2,
         0x4ae0, 0xa5b6, 0xa4d0, 0xd250, 0x1d255, 0xb540, 0xd6a0, 0xada2, 0x95b0, 0x14977,
         0x4970, 0xa4b0, 0xb4b5, 0x6a50, 0x6d40, 0x1ab54, 0x2b60, 0x9570, 0x52f2, 0x4970,
         0x6566, 0xd4a0, 0xea50, 0x16a95, 0x5ad0, 0x2b60, 0x186e3, 0x92e0, 0x1c8d7, 0xc950,
@@ -59,6 +59,7 @@ class Nongli
     private $nongliDate = [];
     private $time = 0;
     private $tradition = false;
+    protected $srcDate = 0;
 
     /**
      * @param string $day
@@ -74,6 +75,7 @@ class Nongli
      */
     public function getDay($day, $tradition = false)
     {
+        $this->srcDate = $day;
         $this->time = \strtotime($day);
         if ($this->time === false) {
             throw new \Exception('give time error');
@@ -113,14 +115,18 @@ class Nongli
         for ($i = self::YEAR_START[0]; $i < $this->year; $i++) {
             $days += ((($i % 4 === 0 && $i % 100 !== 0) || $i % 400 === 0) ? 366 : 365);
         }
-        $this->toDays = $days + $this->dayNum;
+        $this->toDays = $days + $this->dayNum - self::YEAR_START[2] + 1;
     }
 
     protected function setDayInfo()
     {
         list($this->year, $this->month, $this->day, $this->dayNum) = explode(' ', date('Y j n z', $this->time));
-        if ($this->year > self::YEAR_END[0] || $this->year < self::YEAR_START[0]) {
-            throw new \Exception("Year out of range, $year not in 2100 - 1901 ");
+
+        if ($this->year > self::YEAR_END[0] || $this->year < self::YEAR_START[0]
+             || ($this->year == self::YEAR_START[0] && ($this->month < self::YEAR_START[1] || $this->day < self::YEAR_START[2]))) {
+                 $start = \implode('-',  self::YEAR_START);
+                 $end = \implode('-', self::YEAR_END);
+            throw new \Exception("give date({$this->srcDate}) out of range, must between  $start -- $end ");
         }
         $this->dayNum += 1;
         $this->calToYearDays();

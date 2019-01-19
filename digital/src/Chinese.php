@@ -14,7 +14,7 @@ class Chinese
 {
     protected $zhnum      = '';
     protected $zht        = false;
-    protected $zhInstend       = false;
+    protected $zhInstend  = false;
     const DIGITAL_TABLE   = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
     const DIGITAL_T_TABLE = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
     const UNIT_TABLE      = ['十', '百', '千', '万', '亿'];
@@ -33,7 +33,7 @@ class Chinese
      * </code>
      * @param number $number   a number
      * @param bool   $zht      whether use capital number of chinese
-     * @param int $zhInstend   whether enable special express,is 1 if 11 is 十一 instead of 一十一, 
+     * @param int $zhInstend   whether enable special express,is 1 if 11 is 十一 instead of 一十一,
      *                         is 2 if 21 is 廿一 when number between 21 - 29 that instead of 二十一 - 二十九
      *                         but of $zht is true will invaild
      */
@@ -42,9 +42,9 @@ class Chinese
         if (!\is_numeric($number)) {
             throw new \Exception('paramter 1 must be a numeric');
         }
-        $this->zht   = $zht;
-        $this->zhInstend  = $zhInstend;
-        $this->zhnum = $this->number2zh($number);
+        $this->zht       = $zht;
+        $this->zhInstend = $zhInstend;
+        $this->zhnum     = $this->number2zh($number);
     }
 
     public static function convert($number, $zht = false, $zhsk = 0)
@@ -78,8 +78,11 @@ class Chinese
         $p            = explode('.', $number);
         $digitalTable = $this->zht ? self::DIGITAL_T_TABLE : self::DIGITAL_TABLE;
         $unitTable    = $this->zht ? self::UNIT_T_TABLE : self::UNIT_TABLE;
+        if($number == 0) {
+            return $digitalTable[0];
+        }
         $int          = $sign . $this->addUnit($p[0], $digitalTable, $unitTable);
-        $dec = '';
+        $dec          = '';
         if (isset($p[1])) {
             $dec = $this->convertDecimal($p[1], $digitalTable);
         }
@@ -95,8 +98,10 @@ class Chinese
         $res = '';
         foreach ($np as $i => $sn) {
             $len--;
-            $res .= $this->thousand($sn, $table, $unitTable);
-            if ($len > 0) {
+            $thousand = $this->thousand($sn, $table, $unitTable);
+
+            $res .= $thousand;
+            if ($len > 0 && $thousand !== $table[0]) {
                 $res .= $len % 2 == 0 ? $unitTable[4] : $unitTable[3];
             }
         }
@@ -111,7 +116,6 @@ class Chinese
     protected function thousand($sn, $table, $unitTable)
     {
         $sn = strrev($sn);
-
         $len     = strlen($sn);
         $res     = '';
         $iszero  = 0;
@@ -127,7 +131,7 @@ class Chinese
             } else {
                 if ($n == 0) {
                     $iszero++;
-                    $iszero === 1 && $i != ($len - 1) && $zeroStr .= $table[0];
+                    $iszero === 1 && $i != ($len - 1) && $zeroStr = $table[0];
                 } else {
                     $iszero = 0;
                 }
@@ -139,7 +143,9 @@ class Chinese
                 $res .= $number . $unit;
             }
         }
-
+        if (!$res) {
+            $res .= $zeroStr;
+        }
         return $res;
     }
 
