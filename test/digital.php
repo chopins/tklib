@@ -1,7 +1,7 @@
 <?php
 
-use Toknot\Digital\Chinese;
-use Toknot\Digital\Byte;
+use Toknot\Math\Chinese;
+use Toknot\Math\Byte;
 
 include_once __DIR__.'/autoload.php';
 echo new Chinese(0, false, 2);

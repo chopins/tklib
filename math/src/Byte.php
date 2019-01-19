@@ -49,7 +49,7 @@ class Byte
         if($base == 10) {
             return Math::pow(1000, $idx + 1);
         }
-        return constant("\Toknot\Digital\Byte::{$unit}B");
+        return constant(self::class ."::{$unit}B");
     }
 
     /**

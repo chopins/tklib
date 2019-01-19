@@ -9,7 +9,7 @@
  */
 namespace Toknot\Date;
 
-use Toknot\Digital\Chinese;
+use Toknot\Math\Chinese;
 
 class Nongli
 {
