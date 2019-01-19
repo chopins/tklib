@@ -58,6 +58,7 @@ class Nongli
     private $toDays     = 0;
     private $nongliDate = [];
     private $time = 0;
+    private $tradition = false;
 
     /**
      * @param string $day
@@ -71,12 +72,13 @@ class Nongli
      *                   the 'l' key of value determine whether leap month
      *                   the 'y' key of value is offset of self::GANZHI_MAP
      */
-    public function getDay($day)
+    public function getDay($day, $tradition = false)
     {
         $this->time = \strtotime($day);
         if ($this->time === false) {
-            throw new \Exception('time error');
+            throw new \Exception('give time error');
         }
+        $this->tradition = $tradition;
         $this->setDayInfo();
         return $this->getNongliDay();
     }
@@ -88,11 +90,12 @@ class Nongli
         $dateData['gd'] = date('Y-m-d', $this->time);
         $dateData['ut'] = $this->time;
         $dateData['gc'] = ['y' => $this->year, 'm'=>$this->month, 'd' => $this->day];
-        if($this->nongliDate[1] > 19 && $this->nongliDate[1] < 30) {
-
-        }
+        
         $monthName = Chinese::convert($this->nongliDate[1], false, true);
         $month = $this->nongliDate[3] == 1 ? self::MONTH_ZH_LEAP . $monthName : $monthName;
+        if($this->tradition && isset(self::MONTH_ZH_NAME[$this->nongliDate[1]])) {
+            $month = self::MONTH_ZH_NAME[$this->nongliDate[1]];
+        }
         $day = Chinese::convert($this->nongliDate[2], false, 2);
         if($this->nongliDate[2] < 11) {
             $day = self::DAY_ZH_PREFIX . $day;
