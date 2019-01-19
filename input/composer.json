@@ -14,8 +14,8 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/chopins/input/issues?state=open",
-        "source": "https://github.com/chopins/input"
+        "issues": "https://github.com/chopins/tklib/issues?state=open",
+        "source": "https://github.com/chopins/tklib"
     },
     "require": {
         "php": ">=7.0.0",

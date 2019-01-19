@@ -1,5 +1,5 @@
 {
-    "name": "toknot/digital",
+    "name": "toknot/math",
     "description": "A php framework",
     "keywords": ["framework", "php","toknot","digital","number","math"],
     "homepage": "http://toknot.com",
@@ -14,8 +14,8 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/chopins/digital/issues?state=open",
-        "source": "https://github.com/chopins/digital"
+        "issues": "https://github.com/chopins/tklib/issues?state=open",
+        "source": "https://github.com/chopins/tklib"
     },
     "minimum-stability": "dev",
     "require": {

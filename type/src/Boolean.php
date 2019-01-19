@@ -3,14 +3,14 @@
 /**
  * Toknot (http://toknot.com)
  *
- * @copyright  Copyright (c) 2011 - 2018 Toknot.com
+ * @copyright  Copyright (c) 2011 - 2019 Toknot.com
  * @license    http://toknot.com/LICENSE.txt New BSD License
  * @link       https://github.com/chopins/toknot
  */
 
-namespace Toknot\Misc;
+namespace Toknot\Type;
 
-use Toknot\Misc\Scalar;
+use Toknot\Type\Scalar;
 
 class Boolean extends Scalar
 {

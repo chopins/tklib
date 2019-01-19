@@ -1,7 +1,7 @@
 {
-    "name": "toknot/misc",
-    "description": "misc for php",
-    "keywords": ["framework", "php","toknot","misc"],
+    "name": "toknot/type",
+    "description": "type for php",
+    "keywords": ["framework", "php","toknot","type"],
     "homepage": "http://toknot.com",
     "license": "BSD-3-Clause",
     "version" : "0.1",
@@ -14,15 +14,15 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/chopins/misc/issues?state=open",
-        "source": "https://github.com/chopins/misc"
+        "issues": "https://github.com/chopins/tklib/issues?state=open",
+        "source": "https://github.com/chopins/tklib"
     },
     "require": {
         "php": ">=7.0.0"
     },
     "autoload" : {
         "psr-4": {
-            "Toknot\\Misc\\": "src/"
+            "Toknot\\Type\\": "src/"
         }
     }
 }

@@ -1,14 +1,33 @@
 # tklib
 toknot libs 
 
-##date
+#date
+日期时间相关
 
-##digital
+* 日期格式化
+* 公历到农历的转换(1900年-2100年)
+* 时间相关操作
 
-##input
+#math
+数字计算相关
 
-##misc
+* 有理数转中文数字表达
+* 字节数格式化
+* 任意精度数学运算
+* bit 位运算
 
-##path
+#input
+输入操作
 
-##process
+* HTTP 请求数据操作
+* 命令行参数操作
+* 环境变量数据操作
+
+#type
+类型定义
+
+#path
+路径操作相关
+
+#process
+进程相关
