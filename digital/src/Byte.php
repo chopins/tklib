@@ -20,8 +20,8 @@ class Byte
     const EB             = '1152921504606846976';
     const ZB             = '1180591620717411303424';
     const YB             = '1208925819614629174706176';
-    private static $unit = ['K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
-    private static $zhunit = ['K' =>'千', 'M' => '兆', 'G' => '吉', 'T' => '太', 'P' => '拍', 'E' => '艾', 'Z' => '泽' , 'Y' => '尧'];
+    const UNIT = ['K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
+    const ZHUNIT = ['K' =>'千', 'M' => '兆', 'G' => '吉', 'T' => '太', 'P' => '拍', 'E' => '艾', 'Z' => '泽' , 'Y' => '尧'];
     public static $isZh = false;
 
     protected static function math(&$byte, $op)
@@ -43,7 +43,7 @@ class Byte
             return 1;
         }
         $unit = strtoupper($unit);
-        if (false === ($idx = array_search($unit, self::$unit, true))) {
+        if (false === ($idx = array_search($unit, self::UNIT, true))) {
             throw new \Exception("passed unknown byte unit '$unit'");
         }
         if($base == 10) {
@@ -73,11 +73,11 @@ class Byte
         }
         self::checkBase($base);
         $res   = [];
-        $start = count(self::$unit) - 1;
+        $start = count(self::UNIT) - 1;
         for ($i = $start; $i >= 0; $i--) {
-            $defByte = self::getBytes(self::$unit[$i], $base);
+            $defByte = self::getBytes(self::UNIT[$i], $base);
             if ($byte > $defByte) {
-                $res[self::$unit[$i]] = self::math($byte, $defByte);
+                $res[self::UNIT[$i]] = self::math($byte, $defByte);
             }
         }
         if($getString !== false) {
@@ -86,7 +86,7 @@ class Byte
             $prefix = self::$isZh ? '字节' : $prefix;
             $sep = \is_string($getString) ? $getString : '';
             foreach($res as $u => $v) {
-                $u = self::$zhunit[$u];
+                $u = self::ZHUNIT[$u];
                 $var .= "{$v}{$u}{$prefix}{$sep}";
             }
             return "{$var}{$byte}{$prefix}";

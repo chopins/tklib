@@ -87,7 +87,7 @@ class Math
     public static function checkMathFunc($func, $gmpFunc = null)
     {
         if (!empty(self::$mathFunc[$func])) {
-            return self::$mathFunc;
+            return self::$mathFunc[$func];
         } elseif (isset(self::$mathFunc[$func]) && self::$mathFunc[$func] === false) {
             return false;
         }
