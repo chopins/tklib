@@ -3,14 +3,13 @@
 /**
  * Toknot (http://toknot.com)
  *
- * @copyright  Copyright (c) 2011 - 2017 Toknot.com
+ * @copyright  Copyright (c) 2011 - 2019 Toknot.com
  * @license    http://toknot.com/LICENSE.txt New BSD License
  * @link       https://github.com/chopins/toknot
  */
 
 namespace Toknot\Process;
 
-use Exception;
 use Toknot\Date\Time;
 use Toknot\Input\CommandInput;
 
@@ -44,10 +43,10 @@ class Process
     public function __construct()
     {
         if (!extension_loaded('pcntl')) {
-            throw new Exception('pcntl extension un-loaded');
+            throw new \RuntimeException('pcntl extension un-loaded');
         }
         if (!extension_loaded('posix')) {
-            throw new Exception('posix extension un-loaded');
+            throw new \RuntimeException('posix extension un-loaded');
         }
         $this->argv = CommandInput::instance();
     }
@@ -61,7 +60,7 @@ class Process
     public function setProcessTitle($title)
     {
         if (PHP_MIN_VERSION < 5) {
-            throw new Exception('setProcessTitle() is avaiabled when only php version greater then 5.5');
+            throw new \RuntimeException('setProcessTitle() is avaiabled when only php version greater then 5.5');
         }
         return cli_set_process_title($title);
     }
@@ -171,7 +170,7 @@ class Process
      * @param string|array $message
      * @param array $args
      * @return boolean
-     * @throws Exception
+     * @throws \Exception
      */
     public function addTask($local, $port, $message)
     {
@@ -179,7 +178,7 @@ class Process
 
         try {
             $sock = stream_socket_client("tcp://$local:$port", $errno, $errstr, 2, STREAM_CLIENT_CONNECT);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             throw $e;
         }
 
@@ -197,7 +196,7 @@ class Process
      * @param resource $get
      * @param callable $taskCall
      * @return int
-     * @throws Exception
+     * @throws \Exception
      */
     protected function taskManager($get, $taskCall)
     {
@@ -212,7 +211,7 @@ class Process
             $except = null;
             $change = stream_select($r, $w, $except, 0, 200000);
             if (false === $change) {
-                throw new Exception('task queue select fail');
+                throw new \RuntimeException('task queue select fail');
             }
 
             if ($change > 0) {
@@ -282,7 +281,7 @@ class Process
 
             $change = stream_select($r, $w, $except, 0, 200000);
             if (false === $change) {
-                throw new Exception('task queue select fail');
+                throw new \RuntimeException('task queue select fail');
             }
 
             if ($change > 0) {
@@ -375,7 +374,7 @@ class Process
         }
         $lock = stream_socket_server(self::ANY_LOCK_SOCK . $port, $errno, $errstr);
         if (!$lock) {
-            throw new Exception($errstr, $errno);
+            throw new \RuntimeException($errstr, $errno);
         }
         $lockpid = 0;
 
@@ -390,7 +389,7 @@ class Process
         $errstr = '';
         try {
             $alock = stream_socket_client(self::ANY_LOCK_SOCK . $port, $errno, $errstr, 1, STREAM_CLIENT_ASYNC_CONNECT);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             return false;
         }
         return $this->sendLockMessage($alock, self::CMD_LOCK);
@@ -402,7 +401,7 @@ class Process
             $errno  = 0;
             $errstr = '';
             $alock  = stream_socket_client(self::ANY_LOCK_SOCK . $port, $errno, $errstr, 1, STREAM_CLIENT_ASYNC_CONNECT);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             return false;
         }
         return $this->sendLockMessage($alock, self::CMD_UNLOCK, $unlockId);
@@ -505,7 +504,7 @@ class Process
     public function lock()
     {
         if (!is_resource($this->lock)) {
-            throw new Exception('blood lock server not runing');
+            throw new \RuntimeException('blood lock server not runing');
         }
         return $this->sendLockMessage($this->lock, self::CMD_LOCK);
     }
@@ -518,7 +517,7 @@ class Process
     public function unlock()
     {
         if (!is_resource($this->lock)) {
-            throw new Exception('blood lock server not runing');
+            throw new \RuntimeException('blood lock server not runing');
         }
         return $this->sendLockMessage($this->lock, self::CMD_UNLOCK);
     }
@@ -559,11 +558,11 @@ class Process
     {
         if (!is_callable($callable) && is_array($callable)) {
             if (count($callable) !== $number) {
-                throw new Exception("callable number must eq 1 paramter, value is $number");
+                throw new \LengthException("callable number must eq 1 paramter value this is $number");
             }
             foreach ($callable as $i => $func) {
                 if (!is_callable($func)) {
-                    throw new Exception("passed #2 paramter of index $i is not callable");
+                    throw new \InvalidArgumentException("passed #2 paramter of index $i is not callable");
                 }
             }
         }
@@ -720,7 +719,7 @@ class Process
     {
         $pid = pcntl_fork();
         if ($pid < 0) {
-            throw new Exception('process fork fail');
+            throw new \RuntimeException('process fork fail');
         } elseif ($pid == 0) {
             return 0;
         }

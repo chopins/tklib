@@ -40,7 +40,7 @@ class Chinese
     public function __construct($number, $zht = false, $zhInstend = 0)
     {
         if (!\is_numeric($number)) {
-            throw new \Exception('paramter 1 must be a numeric');
+            throw new \InvalidArgumentException('paramter 1 must be a numeric');
         }
         $this->zht       = $zht;
         $this->zhInstend = $zhInstend;

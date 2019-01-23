@@ -114,18 +114,18 @@ class Date
     {
         $timepart = explode(' ', $time);
         if (\count($timepart) !== 6) {
-            throw new \Exception('passed time must be "H i s n j Y" with number');
+            throw new \InvalidArgumentException('passed time must be "H i s n j Y" with number');
         }
         $passOrder = ['H', 'i', 's', 'n', 'j', 'Y'];
         foreach ($timepart as $i => $v) {
             if (!\is_numeric($v)) {
                 if (\strpos($v, $passOrder[$i]) !== 0) {
-                    throw new \Exception('only support 2 operands for simple arithmetic and first operans must be a char in "HisnjY"');
+                    throw new \InvalidArgumentException('only support 2 operands for simple arithmetic and first operans must be a char in "HisnjY"');
                 }
                 $realtime = date($passOrder[$i]);
                 $operands = $v[1] == '*' && $v[2] == '*' ? \substr($v, 2) : \substr($v, 1);
                 if (!\is_numeric($operands)) {
-                    throw new \Exception('the second operand must be numeric');
+                    throw new \InvalidArgumentException('the second operand must be numeric');
                 }
                 if ($v[1] == '+') {
                     $timepart[$i] = $realtime + $operands;
@@ -138,7 +138,7 @@ class Date
                 } elseif ($v[1] == '*') {
                     $timepart[$i] = $realtime * $operands;
                 } else {
-                    throw new \Exception('only support operators is "+,-,*,/,**"');
+                    throw new \InvalidArgumentException('only support operators is "+,-,*,/,**"');
                 }
             }
         }

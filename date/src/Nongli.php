@@ -93,7 +93,7 @@ class Nongli
         $this->srcDate = $day;
         $this->time    = \strtotime($day);
         if ($this->time === false) {
-            throw new \Exception('give time error');
+            throw new \UnexpectedValueException('give time error');
         }
         $this->tradition = $tradition;
         $this->setDayInfo();
@@ -140,7 +140,7 @@ class Nongli
             || ($this->year == self::YEAR_START[0] && $this->dayNum < $this->startYearDays)) {
             $start = \implode('-', self::YEAR_START);
             $end   = \implode('-', self::YEAR_END);
-            throw new \Exception("give date({$this->srcDate}) out of range, must between  $start -- $end (contain the start and end date)");
+            throw new \OutOfRangeException("give date({$this->srcDate}) out of range, must between  $start -- $end (contain the start and end date)");
         }
         $this->dayNum += 1;
         $this->calToYearDays();

@@ -18,7 +18,7 @@ class Math
 
     protected static function checkParameter($op1, $op2) {
         if(!\is_numeric($op1) || !\is_numeric($op2)) {
-            throw new \Exception("parameter (#1 $op1, #2$op2) must be numeric");
+            throw new \InvalidArgumentException("parameter (#1 $op1, #2$op2) must be numeric");
         }
     }
 
@@ -406,7 +406,7 @@ class Math
     {
         $big = self::isBigInt($op2);
         if ($big) {
-            throw new \Exception('unsupport divider is big integer, number char length must less than PHP_INT_MAX of length');
+            throw new \OutOfRangeException('unsupport divider is big integer, number char length must less than PHP_INT_MAX of length');
         }
         $op1 = (string) $op1;
         $op2 = (string) $op2;
@@ -444,7 +444,7 @@ class Math
     public static function base2dec($number, $base)
     {
         if ($base > 36) {
-            throw new \Exception('base must less 37');
+            throw new \OutOfRangeException('base must less 37');
         }
         $maxlen = self::integerStrMaxLen($base);
         $len    = strlen($number);
@@ -469,7 +469,7 @@ class Math
     public static function dec2base($number, $base)
     {
         if ($base > 36) {
-            throw new \Exception('base must less 37');
+            throw new \OutOfRangeException('base must less 37');
         }
         $len = self::isBigInt($number);
         if (!len) {
@@ -513,7 +513,7 @@ class Math
         if ($base === 10) {
             return '0x' . self::dec2base($number, 10);
         }
-        throw new \Exception('give number is invaild decimal or hexadecimal');
+        throw new \InvalidArgumentException('give number is invaild decimal or hexadecimal');
     }
 
     protected static function strBitOp($left, $right, $len, $callable)

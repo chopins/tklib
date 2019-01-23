@@ -44,7 +44,7 @@ class Byte
         }
         $unit = strtoupper($unit);
         if (false === ($idx = array_search($unit, self::UNIT, true))) {
-            throw new \Exception("passed unknown byte unit '$unit'");
+            throw new \UnexpectedValueException("passed unknown byte unit '$unit'");
         }
         if($base == 10) {
             return Math::pow(1000, $idx + 1);
@@ -69,7 +69,7 @@ class Byte
     {
         $pb = $tb = $gb = $mb = $kb = 0;
         if (!Math::isInteger($byte)) {
-            throw new \Exception('must give integer digital or integer string, donot pass float digital');
+            throw new \InvalidArgumentException('must give integer digital or integer string, donot pass float digital');
         }
         self::checkBase($base);
         $res   = [];
@@ -120,7 +120,7 @@ class Byte
         foreach ($number as $i => $v) {
             $numUnit = $unit[$i];
             if($i != $end && empty($numUnit)) {
-                throw new \Exception('give data size string of format error');
+                throw new \UnexpectedValueException('give data size string of format error');
             }
             $bytes = self::getBytes($numUnit, $base);
             $res = Math::add($res,Math::mul($v, $bytes));
