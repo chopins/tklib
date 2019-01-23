@@ -10,6 +10,8 @@
 
 namespace Toknot\Error;
 
+use Toknot\Error\ErrorReportException;
+
 class Error
 {
     protected static $errorExceptionInfo = [];
@@ -19,12 +21,20 @@ class Error
         $this->error2Exception();
     }
 
+    /**
+     * @param mixed $exception
+     * @throws \InvalidArgumentException	when gived class has not  Toknot\Error\ErrorReportException as one of parents
+     * @throws \UnexpectedValueException	when give class undfined constant $exception::PHP_ERROR_TYPE and $exception::PHP_ERROR_REPORT_MESSAGE_KEY
+     */
     public static function enableError2Exception($exception)
     {
+        if (\is_subclass_of($exception, ErrorReportException::class)) {
+            throw new \InvalidArgumentException('parameter #1 must be object or class name and extend Toknot\Error\ErrorReportException');
+        }
         if (defined("{$exception}::PHP_ERROR_TYPE") && defined("{$exception}::PHP_ERROR_REPORT_MESSAGE_KEY")) {
             self::$errorExceptionInfo[] = $exception;
         }
-        throw new \InvalidArgumentException("parameter #1 must be object or class name and has constant $exception::PHP_ERROR_TYPE and $exception::PHP_ERROR_REPORT_MESSAGE_KEY");
+        throw new \UnexpectedValueException("parameter #1 class must be defined constant $exception::PHP_ERROR_TYPE and $exception::PHP_ERROR_REPORT_MESSAGE_KEY");
     }
 
     public static function setErrorHandler($handler)
@@ -52,7 +62,7 @@ class Error
         \set_error_handler(function ($errno, $errstr, $errfile, $errline) {
             foreach (self::$errorExceptionInfo as $info) {
                 if ($errno == $info::PHP_ERROR_TYPE && strpos($errstr, $info::PHP_ERROR_REPORT_MESSAGE_KEY) !== false) {
-                    throw new $info;
+                    throw new $info($errstr, $errno, $errfile, $errline);
                 }
             }
             $func = self::$errorHandler;

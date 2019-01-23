@@ -10,7 +10,9 @@
 
 namespace Toknot\Path;
 
-class PathExistsException extends \RuntimeException
+use Toknot\Error\ErrorReportException;
+
+class PathExistsException extends ErrorReportException
 {
     const PHP_ERROR_TYPE = E_WARNING;
     const PHP_ERROR_REPORT_MESSAGE_KEY = 'File exists';

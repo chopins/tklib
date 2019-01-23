@@ -10,7 +10,9 @@
 
 namespace Toknot\Path;
 
-class PathNotExistsException extends \RuntimeException {
+use Toknot\Error\ErrorReportException;
+
+class PathNotExistsException extends ErrorReportException {
     const PHP_ERROR_REPORT_MESSAGE_KEY = 'No such file or directory';
     const PHP_ERROR_TYPE = E_WARNING;
 }

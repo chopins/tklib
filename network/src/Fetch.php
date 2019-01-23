@@ -43,8 +43,6 @@ class Fetch
         if (!self::$curlAvailable) {
             if (\extension_loaded('curl')) {
                 self::$curlAvailable = true;
-            } else {
-                throw new \RuntimeException('php curl extension not load');
             }
         }
         if (self::$curlAvailable && !self::$curlSafeOpt && defined('CURLOPT_SAFE_UPLOAD')) {
@@ -54,16 +52,54 @@ class Fetch
 
     protected function open($op)
     {
-        $ch = \curl_init($url);
-        \curl_setopt_array($ch, $op);
-        $res             = \curl_exec($ch);
-        $this->lastErrno = \curl_errno($ch);
-        $this->lastError = \curl_error($ch);
-        \curl_close($ch);
-        return $res;
+        if (self::$curlAvailable) {
+            $ch = \curl_init($this->url);
+            \curl_setopt_array($ch, $op);
+            $res             = \curl_exec($ch);
+            $this->lastErrno = \curl_errno($ch);
+            $this->lastError = \curl_error($ch);
+            \curl_close($ch);
+            return $res;
+        } else {
+            $cxt = \stream_context_create($opt);
+            $res = \file_get_contents($url, $cxt);
+            if (!$this->disableHeaderCallback) {
+                $this->responseHeader = \get_headers();
+            }
+            return $res;
+        }
+
     }
 
-    protected function setOpt()
+    protected function setPHPStramOpt()
+    {
+        $op = ['http' => ['header' => '']];
+        if ($this->cookie) {
+            if (\is_array($this->cookie)) {
+                $cookie = \http_build_query($this->cookie, '', ';');
+            } elseif (is_file($this->cookie)) {
+                $cookie = \file_get_contents($this->cookie);
+            }
+            $cookie = trim($cookie, "\r\n");
+            $op['http']['header'] .= "Cookie: $cookie\r\n";
+        }
+        if ($this->referer) {
+            $op['http']['header'] .= "Referer: {$this->referer}\r\n";
+        }
+        if ($this->autoFollow) {
+            $op['http']['follow_location'] = 1;
+            $op['http']['max_redirects']   = $this->maxRedirs;
+        } else {
+            $op['http']['follow_location'] = 0;
+        }
+        if ($this->agent) {
+            $op['http']['user_agent'] = $agent;
+        }
+
+        return $op;
+    }
+
+    protected function setCurlOpt()
     {
         $op = [];
         if (\is_array($this->cooke)) {
@@ -101,6 +137,15 @@ class Fetch
         return $op;
     }
 
+    protected function setOpt()
+    {
+        if (!self::$curlAvailable) {
+            return $this->setPHPStramOpt();
+        } else {
+            return $this->setCurlOpt();
+        }
+    }
+
     protected function disableHeaderCallback()
     {
         $this->disableHeaderCallback = true;
@@ -117,6 +162,23 @@ class Fetch
             }
             return strlen($header);
         };
+    }
+
+    protected function upload($file, &$op)
+    {
+        if (\is_null($file)) {
+            return [];
+        }
+        if (is_array($file)) {
+            $op = [];
+            foreach ($file as $key => $file) {
+                if (\is_file($file)) {
+                    $op[$key] = new CURLFile($file);
+                }
+            }
+            return $op;
+        }
+        throw new \InvalidArgumentException('upload file type error, only array within key/filepath');
     }
 
     public function disableAutoFollow()
@@ -200,12 +262,18 @@ class Fetch
     }
 
     /**
+     * http get request
+     *
      * @return string
      */
     public function get()
     {
-        $op                  = $this->setOpt();
-        $op[CURLOPT_HTTPGET] = true;
+        $op = $this->setOpt();
+        if (self::$curlAvailable) {
+            $op[CURLOPT_HTTPGET] = true;
+        } else {
+            $op['http']['method'] = 'GET';
+        }
         return $this->open($op);
     }
 
@@ -217,58 +285,71 @@ class Fetch
         return $this->responseHeader;
     }
 
-    protected function upload($file, &$op)
+    /**
+     * use curl request url
+     *
+     * @return mixed    string or bool false
+     */
+    public function request()
     {
-        if (\is_null($file)) {
-            return [];
-        }
-        if (is_array($file)) {
-            $op = [];
-            foreach ($file as $key => $file) {
-                if (\is_file($file)) {
-                    $op[$key] = new CURLFile($file);
-                }
-            }
-            return $op;
-        }
-        throw new \InvalidArgumentException('upload file type error, only array within key/filepath');
+        $op = $this->setOpt();
+        return $this->open($op);
     }
 
     /**
+     * http post request
+     *
      * @param  mixed $data      form feilds array, without upload file
      * @param  array $file      form upload file feilds
+     * @param  array $form      whether is form
      * @return string
+     * @throws \InvalidArgumentException    when $data not scalar or array
+     *                                      when $file is set and not array
      */
     public function post($data, array $file = [], $form = true)
     {
         if (!\is_scalar($data) && !\is_array($data)) {
             throw new \InvalidArgumentException('paramter #1 must be string or array');
         }
-        $op               = $this->setOpt();
-        $op[CURLOPT_POST] = 1;
-        if ($form && is_array($data) && $file) {
-            if (self::$curlSafeOpt) {
-                $op[CURLOPT_SAFE_UPLOAD] = true;
+        $op = $this->setOpt();
+        if (self::$curlAvailable) {
+            $op[CURLOPT_POST] = 1;
+            if ($form && is_array($data) && $file) {
+                if (self::$curlSafeOpt) {
+                    $op[CURLOPT_SAFE_UPLOAD] = true;
+                }
+                $fileopt                = $this->upload($file, $data);
+                $op[CURLOPT_POSTFIELDS] = $data;
+            } elseif ($form && \is_array($data)) {
+                $op[CURLOPT_POSTFIELDS] = \http_build_query($data);
+            } else {
+                $op[CURLOPT_POSTFIELDS] = $data;
             }
-            $fileopt                = $this->upload($file, $data);
-            $op[CURLOPT_POSTFIELDS] = $data;
-        } elseif ($form && \is_array($data)) {
-            $op[CURLOPT_POSTFIELDS] = \http_build_query($data);
         } else {
-            $op[CURLOPT_POSTFIELDS] = $data;
+            if ($file) {
+                throw new \RuntimeException("php stream mode not support post file");
+            }
+            $op['http']['method']  = 'POST';
+            $op['http']['content'] = is_array($data) ? \http_build_query($data) : $data;
         }
         return $this->open($op);
     }
 
     /**
-     * @param string $file      save to file path
+     * download file
+     *
+     * @param string $file      save to file
      * @param bool $override    whether override exists file
      * @return bool
+     * @throws \Toknot\Path\PathExistsException    when $override set false and give $file exist
      */
     public function download($file, $override = false)
     {
+        if(!self::$curlAvailable) {
+            throw new \RuntimeException('\Toknot\Network\Fetch::download() method need curl');
+        }
         if (!$override && \file_exists($file)) {
-            throw new \PathExistsException("$file is exists");
+            throw new PathExistsException("$file is exists");
         }
         $fp                         = \fopen($file, 'w+');
         $op                         = $this->setOpt();
@@ -276,4 +357,5 @@ class Fetch
         $op[CURLOPT_RETURNTRANSFER] = false;
         return $this->open($op);
     }
+
 }
