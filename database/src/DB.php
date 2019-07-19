@@ -24,23 +24,36 @@ class DB extends PDO {
     private $sessionQueryAutocommitChanged = false;
     public $tableLimit = 100;
     public static $forceFlushDatabaseCache = false;
+    public $cacheDir = '';
 
     const NS = '\\';
+    const DB_ATTR_CACHE_DIR = 'db_cache_dir';
+    const DB_ATTR_TABLE_PREFIX = 'db_table_prefix';
 
-    public function __construct($dsn, $modelpath, $username = null, $pw = null, $option = []) {
+    public function __construct($dsn, $username = null, $pw = null, $option = []) {
         parent::__construct($dsn, $username, $pw, $option);
-        $this->tableModelCacheFile = $modelpath;
         $this->queryDBName();
+        $this->generateCacheFile($option);
+        $this->setTablePrefix($option);
         $this->flushDatabaseCache();
         self::$ins = $this;
+    }
+
+    protected function generateCacheFile($option) {
+        if(isset($option[self::DB_ATTR_CACHE_DIR])) {
+            $cacheDir = $option[self::DB_ATTR_CACHE_DIR];
+            $this->tableModelCacheFile = $cacheDir . DIRECTORY_SEPARATOR . $this->dbname . '.php';
+        }
     }
 
     public static function connect() {
         return self::$ins;
     }
 
-    public function setTablePrefix($prefix) {
-        $this->tablePrefix = $prefix;
+    protected function setTablePrefix($option) {
+        if(isset($option[self::DB_ATTR_TABLE_PREFIX])) {
+            $this->tablePrefix = $option[self::DB_ATTR_TABLE_PREFIX];
+        }
     }
 
     public function setConnectAutocommit() {
@@ -52,7 +65,7 @@ class DB extends PDO {
     }
 
     public function flushDatabaseCache() {
-        if (self::$forceFlushDatabaseCache || !file_exists(self::$tableModelCacheFile)) {
+        if (self::$forceFlushDatabaseCache || !file_exists($this->tableModelCacheFile)) {
             $this->generateTableModel();
         }
     }
@@ -83,11 +96,11 @@ class DB extends PDO {
             $table = substr($table, strlen($this->tablePrefix));
         }
 
-        $tableClass = $this->tableModelNamespace() . self::NS . $this->symbolConvert($table);
+        $tableClass = $this->tableModelNamespace() . self::NS . self::symbolConvert($table);
         if (class_exists($tableClass, false)) {
             return new $tableClass();
         }
-        trigger_error("RuntimeException: table '$table' not exists at database '$this->dbname'", E_USER_ERROR);
+        throw new \PDOException("RuntimeException: table '$table' not exists at database '$this->dbname'", E_USER_ERROR);
     }
 
     public function tableNumber() {
@@ -128,10 +141,10 @@ class DB extends PDO {
     }
 
     public function tableModelNamespace() {
-        return 'Toknot' . self::NS . 'TableModel' . self::NS . $this->symbolConvert($this->dbname);
+        return 'Toknot' . self::NS . 'TableModel' . self::NS . self::symbolConvert($this->dbname);
     }
 
-    public function symbolConvert($name) {
+    public static function symbolConvert($name) {
         return str_replace('_', '', ucwords($name, '_'));
     }
 
@@ -160,10 +173,12 @@ class DB extends PDO {
 
             $tableList[$tableName]['column'][] = $column;
 
-            $values = [];
+            $enumValues = [];
             if ($col['DATA_TYPE'] == 'set' || $col['DATA_TYPE'] == 'enum') {
                 $len = strlen($col['DATA_TYPE']);
-                $values = explode(',', str_replace(self::NS, ' ', substr($col['COLUMN_TYPE'], $len + 1, -1)));
+                $enumValues = eval('return [' . substr($col['COLUMN_TYPE'], $len + 1, -1) . '];');
+            } else {
+                $enumValues = false;
             }
             if ($col['CHARACTER_MAXIMUM_LENGTH'] !== null) {
                 $len = $col['CHARACTER_MAXIMUM_LENGTH'];
@@ -172,13 +187,20 @@ class DB extends PDO {
             } elseif ($col['DATETIME_PRECISION'] !== null) {
                 $len = $col['DATETIME_PRECISION'];
             }
+            $defaultValue = false;
+            if($col['COLUMN_DEFAULT'] == 'NULL') {
+                $defaultValue = NULL;
+            } elseif($col['COLUMN_DEFAULT'] == "''") {
+                $defaultValue = '';
+            }
             $tableList[$tableName]['columnInfo'][$column] = [
-                strtoupper($col['DATA_TYPE']),
-                $len,
-                $col['NUMERIC_SCALE'],
-                $col['COLUMN_DEFAULT'], 
-                $values,
-                $col['COLUMN_COMMENT'],
+                'type' => strtoupper($col['DATA_TYPE']),
+                'length' => (int)$len,
+                'scale' => (int)$col['NUMERIC_SCALE'],
+                'default' => $defaultValue, 
+                'enum' => $enumValues,
+                'comment' => $col['COLUMN_COMMENT'],
+                'null' => $col['IS_NULLABLE'] == 'NO' ? false : true,
             ];
 
             if ($col['COLUMN_KEY'] == 'PRI') {
@@ -194,7 +216,7 @@ class DB extends PDO {
             }
         }
 
-        $class = '<?php ' . '/* Auto generate by toknot at Date:' . date('Y-m-d H:i:s') . ' */' . PHP_EOL;
+        $class = '<?php /* Auto generate by toknot at Date:' . date('Y-m-d H:i:s') . ' */' . PHP_EOL;
        
         $class .= 'namespace ' . $this->tableModelNamespace() . ';';
         $class .= 'use ' . TableModel::class . ';' . PHP_EOL;
@@ -204,24 +226,27 @@ class DB extends PDO {
             } else {
                 $keys = [];
             }
-
+            $tableNameClass = $tableName;
             if ($this->tablePrefix) {
-                $tableName = substr($tableName, strlen($this->tablePrefix));
+                $tableNameClass = substr($tableName, strlen($this->tablePrefix));
             }
             $this->generateTablePropertyComment($class, $cols['columnInfo']);
-            $class .= 'class ' . $this->symbolConvert($tableName) . ' extends TableModel {'  . PHP_EOL;
+            $class .= 'class ' . self::symbolConvert($tableNameClass) . ' extends TableModel {'  . PHP_EOL;
             $sep = '`, `';
-            $class .= $this->generateTableConst('SELECT_FEILD', '`' . join($sep, $cols['column']) . '`');
-            $class .= $this->generateTableConst('COLUMN_LIST', $cols['column'], true);
-            $class .= $this->generateTableConst('AUTO_INCREMENT', $cols['ai']);
-            $class .= $this->generateTableConst('UNIQUE', $cols['uni'], true);
+            $class .= $this->generateTableConst('TABLE_SELECT_FEILD', '`' . join($sep, $cols['column']) . '`');
+            $class .= $this->generateTableConst('TABLE_COLUMN_LIST', $cols['column'], true);
+            $class .= $this->generateTableConst('TABLE_AUTO_INCREMENT', $cols['ai']);
+            $class .= $this->generateTableConst('TABLE_UNIQUE', $cols['uni'], true);
             if ($keys) {
-                $class .= $this->generateTableConst('INDEX', array_merge($keys['mulIndex']), true);
-                $class .= $this->generateTableConst('MUL_UNIQUE', $keys['mulUni'], true);
+                $class .= $this->generateTableConst('TABLE_INDEX', array_merge($keys['mulIndex']), true);
+                $class .= $this->generateTableConst('TABLE_MUL_UNIQUE', $keys['mulUni'], true);
             }
-            $class .= $this->generateTableConst('COLS', $cols['columnInfo'], true);
-            $class .= $this->generateTableConst('NAME', $tableName);
-            $class .= $this->generateTableConst('KEY_NAME', $cols['key']);
+            $class .= $this->generateTableConst('TABLE_COLS', $cols['columnInfo'], true);
+            $class .= $this->generateTableConst('TABLE_NAME', $tableName);
+            $class .= $this->generateTableConst('TABLE_KEY_NAME', $cols['key']);
+            $this->generateTableModelProperty($class, 'cas_ver_col', $cols['column'], '');
+            $this->generateTableModelProperty($class, 'set_col_values', $cols['column'], []);
+            $this->generateTableModelProperty($class, 'record_values', $cols['column'], []);
             $class .= '}'. PHP_EOL;
         }
         return $class;
@@ -240,11 +265,21 @@ class DB extends PDO {
         return 'CONST ' . strtoupper($const) . '=' . var_export($expression, true) . ';' . PHP_EOL;
     }
 
+   
+    protected function generateTableModelProperty(&$class, $specProp, $cols, $def = '') {
+        do {
+            $name = '_' . md5(\microtime());
+        }while(\in_array($name, $cols));
+        
+        $specProp = 'ATTR_' . \strtoupper($specProp);
+        $class .= $this->generateTableConst($specProp, $name);
+        $class .= "public \${$name} = ". \var_export($def, true). ";".PHP_EOL;
+    }
     protected function generateTablePropertyComment(&$class, $cols) {
         $class .= '/*' . PHP_EOL;
         foreach($cols as $n => $info) {
-            $type = \strtolower($info[0]);
-            $class .= " * @property {$type} \${$n} {$info[5]}" . PHP_EOL;
+            $type = \strtolower($info['type']);
+            $class .= " * @property {$type} \${$n} {$info['comment']}" . PHP_EOL;
         }
         $class .= '*/' . PHP_EOL;
     }

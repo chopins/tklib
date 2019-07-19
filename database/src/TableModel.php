@@ -12,8 +12,72 @@ use Toknot\Database\DB;
 use Toknot\Database\QueryBuild;
 
 abstract class TableModel {
+    public static $tableAlias = '';
 
-    public static $casVerCol = '';
+    public function __construct($condition = '') {
+        $this->one($condition);
+    }
+
+    protected function getCasVerColAttr() {
+        $pro = self::ATTR_CAS_VER_COL;
+        return $this->$pro;
+    }
+
+    protected function setCasVerColAttr($feilds) {
+        $pro = self::ATTR_CAS_VER_COL;
+        $this->$pro = $feilds;
+    }
+
+    protected function setRecordValues($key, $value = null) {
+        $pro = self::ATTR_RECORD_VALUES;
+        if(\is_array($key)) {
+            $this->$pro = $key;
+            return;
+        }
+        $this->$pro[$key] = $value;
+    }
+
+    protected function getRecordValues($key = null) {
+        $pro = self::ATTR_RECORD_VALUES;
+        if(!$key) {
+            return $this->$pro;
+        }
+        return $this->$pro[$key];
+    }
+
+    protected function setFilterValues($key, $value = null) {
+        $pro = self::ATTR_SET_COL_VALUES;
+        if(\is_array($key)) {
+            $this->$pro = $key;
+            return;
+        }
+        $this->$pro[$key] = $value;
+    }
+
+    protected function getFilterValues($key = null) {
+        $pro = self::ATTR_SET_COL_VALUES;
+        if(!$key) {
+            return $this->$pro;
+        }
+        return $this->$pro[$key];
+    }
+
+    public function __set($name, $value = '') {
+        if(\in_array(self::TABLE_COLUMN_LIST, $name)) {
+            throw new \PDOException("column '$name' not exists in " . self::TABLE_NAME);
+        }
+        if(\is_scalar($value)) {
+            $this->setRecordValues($name, $value);
+        }
+        $this->setFilterValues($name, $value);
+    }
+
+    public function __get($name) {
+        if(\in_array(self::TABLE_COLUMN_LIST, $name)) {
+            throw new \PDOException("column '$name' not exists in " . self::TABLE_NAME);
+        }
+        return $this->getRecordValues($name);
+    }
 
     /**
      * 
@@ -21,6 +85,10 @@ abstract class TableModel {
      */
     public function db() {
         return DB::connect();
+    }
+    public function idValue() {
+        $pkn = self::TABLE_KEY_NAME;
+        return $this->$pkn;
     }
 
     /**
@@ -57,12 +125,13 @@ abstract class TableModel {
         if (!$res) {
             $errInfo = $sth->errorInfo();
             $errData = [$errInfo[1], "SQLSTATE[$errInfo[0]] $errInfo[2]", $sql, $bindParameter];
-            $handle = new ErrorReportHandler($errData);
-            return $handle->throwException();
+            throw new \PDOException("SQLSTATE[$errInfo[0]] $errInfo[2]:(SQL: $sql);PARAMS:" . \var_export($bindParameter));
         }
         $queryBuild->cleanBindParameter();
         return $sth;
     }
+
+    
 
     /**
      * 
@@ -75,7 +144,7 @@ abstract class TableModel {
 
     /**
      * 
-     * @return \Toknot\Lib\Model\Database\QueryBuild
+     * @return \Toknot\Database\QueryBuild
      */
     public function query() {
         return new QueryBuild($this);
@@ -100,7 +169,7 @@ abstract class TableModel {
      * @return string
      */
     public function tableName() {
-        return $this->tableName;
+        return self::TABLE_NAME;
     }
 
     public function quote($string) {
@@ -112,7 +181,7 @@ abstract class TableModel {
      * @return string
      */
     public function getAlias() {
-        return $this->alias;
+        return self::$tableAlias;
     }
 
     /**
@@ -120,17 +189,7 @@ abstract class TableModel {
      * @param string $alias
      */
     public function setAlias($alias = '') {
-        $this->alias = $alias ? $alias : $this->tableName;
-    }
-
-    /**
-     * 
-     * @param mixed $where
-     * @return $this
-     */
-    public function where($where) {
-        $this->where = $where;
-        return $this;
+        self::$tableAlias = $alias ? $alias : self::TABLE_NAME;
     }
 
     /**
@@ -147,32 +206,34 @@ abstract class TableModel {
                 $and->arg($query->col($col)->eq($v));
             }
 
-            return $query->where($and)->limit(1)->row();
+            $list = $query->where($and)->limit(1)->row();
+        } else {
+            $list = $query->findOne($id);
         }
-        return $query->findOne($id);
+        $this->setRecordValues($list);
+        return $this;
     }
 
-    /**
-     * one row ActiveRecord
-     * 
-     * @param mixed $id
-     * @return \Toknot\Lib\Model\Database\ActiveRecord
-     */
-    public function findOne($id) {
-        $list = $this->one($id);
-        if (!$list) {
-            return null;
-        }
-        return new ActiveRecord($this, $list);
+    public function isNewRecord() {
+        return empty($this->getRecordValues());
     }
 
-    /**
-     * empty ActiveRecord
-     * 
-     * @return \Toknot\Lib\Model\Database\ActiveRecord
-     */
-    public function idler() {
-        return new ActiveRecord($this, []);
+    public function save() {
+        if($this->isNewRecord()) {
+            $this->insert($this->getRecordValues());
+        } else {
+            $filter = $this->getFilterValues();
+            $updateData = [];
+            $where = [];
+            foreach ($filter as $key => $value) {
+                if(\is_scalar($value)) {
+                    $updateData[$key] = $value;
+                } else {
+                    $where[$key] = $value;
+                }
+            }
+            $this->updateById($updateData, $this->idValue(), $where);
+        }
     }
 
     /**
@@ -209,7 +270,7 @@ abstract class TableModel {
      */
     public function findGTId($id, $limit, $offset = 0) {
         $query = $this->query();
-        $exp = $query->col(self::KEY_NAME)->gt($id);
+        $exp = $query->col(self::TABLE_KEY_NAME)->gt($id);
         return $query->where($exp)->range($offset, $limit)->all();
     }
 
@@ -223,7 +284,7 @@ abstract class TableModel {
      */
     public function findLTId($id, $limit, $offset = 0) {
         $query = $this->query();
-        $exp = $query->col(self::KEY_NAME)->lt($id);
+        $exp = $query->col(self::TABLE_KEY_NAME)->lt($id);
         return $query->where($exp)->range($offset, $limit)->all();
     }
 
@@ -238,7 +299,7 @@ abstract class TableModel {
      */
     public function casUpdateById(array $param, $id, $casValue, $newValue) {
         $query = $this->query();
-        $exp1 = $query->col(self::KEY_NAME)->eq($id);
+        $exp1 = $query->col(self::TABLE_KEY_NAME)->eq($id);
         $exp2 = $query->col(self::$casVerCol)->eq($casValue);
         $exp = $query->onAnd($exp1, $exp2);
         $param[self::$casVerCol] = $newValue;
@@ -255,7 +316,7 @@ abstract class TableModel {
      */
     public function updateById(array $param, $id, $where = '') {
         $query = $this->query();
-        $exp1 = $query->col(self::KEY_NAME)->eq($id);
+        $exp1 = $query->col(self::TABLE_KEY_NAME)->eq($id);
         $filter = $exp1;
         if ($where) {
             $and = $query->onAnd();
@@ -338,16 +399,16 @@ abstract class TableModel {
      * @param int $newVer       update new cas
      * @return int
      */
-    public function save(array $param, $autoUpate = true, $casVer = 0, $newVer = 0) {
+    public function modify(array $param, $autoUpate = true, $casVer = 0, $newVer = 0) {
         $keys = array_keys($param);
-        if (isset($param[self::KEY_NAME]) && (self::AUTO_INCREMENT || $autoUpate)) {
-            $idValue = $param[self::KEY_NAME];
+        if (isset($param[self::TABLE_KEY_NAME]) && (self::TABLE_AUTO_INCREMENT || $autoUpate)) {
+            $idValue = $param[self::TABLE_KEY_NAME];
             if ($newVer && $casVer) {
                 $this->casUpdateById($param, $idValue, $casVer, $newVer);
             } else {
                 $this->updateById($param, $idValue);
             }
-        } elseif ($autoUpate && ($ainter = array_intersect($keys, self::UNIQUE))) {
+        } elseif ($autoUpate && ($ainter = array_intersect($keys, self::TABLE_UNIQUE))) {
             $query = $this->query();
             $and = $query->onAnd();
             foreach ($ainter as $col => $value) {
@@ -370,9 +431,9 @@ abstract class TableModel {
 
     /**
      * 
-     * @param \Toknot\Lib\Model\Database\QueryBuild $query
+     * @param \Toknot\Database\QueryBuild $query
      * @param int $casVer
-     * @return \Toknot\Lib\Model\Database\Expression
+     * @return \Toknot\Database\Expression
      */
     public function casExpression(QueryBuild $query, $casVer) {
         return $query->col(self::$casVerCol)->eq($casVer);
@@ -380,7 +441,7 @@ abstract class TableModel {
 
     /**
      * 
-     * @param \Toknot\Lib\Model\Database\TableModel $table
+     * @param \Toknot\Database\TableModel $table
      * @param QueryBuild $selfQuery
      * @param string $type
      */
