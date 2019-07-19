@@ -1,5 +1,6 @@
 <?php
 define('ROOT', dirname(__DIR__));
+define('TEMP_DIR', ROOT . '/temp');
 spl_autoload_register(function($class) {
     if(strpos($class, '\Toknot') === 0 || strpos($class, 'Toknot') === 0) {
         list(,$libname,$last) = explode('\\', $class, 3);
