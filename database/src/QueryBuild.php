@@ -103,6 +103,10 @@ class QueryBuild extends QueryExpression {
         $this->leftFeildsList = [];
     }
 
+    public function getExpression() {
+
+    }
+
     public function __clone() {
         $this->cleanBindParameter();
     }
@@ -120,7 +124,7 @@ class QueryBuild extends QueryExpression {
     }
 
     public function key() {
-        return $this->col($this->tableModel->getKey());
+        return $this->col($this->tableModel->getKeyName());
     }
 
     public function col($name, $value = null) {
@@ -368,7 +372,7 @@ class QueryBuild extends QueryExpression {
 
     public function findOne($id) {
         $this->sqlType = self::SELECT;
-        $keyName = $this->tableModel->getKey();
+        $keyName = $this->tableModel->getKeyName();
         if (!$keyName) {
             $unique = $this->tableModel->getUnique();
             $type = is_numeric($id) ? 'number' : 'string';

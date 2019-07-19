@@ -88,9 +88,10 @@ class DB extends PDO {
     /**
      * 
      * @param string $table
+     * @param mixed $condition
      * @return \Toknot\Lib\Model\Database\TableModel
      */
-    public function table($table) {
+    public function table($table, $condition = '') {
         $this->loadTableCacheFile();
         if ($this->tablePrefix && strpos($table, $this->tablePrefix) === 0) {
             $table = substr($table, strlen($this->tablePrefix));
@@ -98,7 +99,7 @@ class DB extends PDO {
 
         $tableClass = $this->tableModelNamespace() . self::NS . self::symbolConvert($table);
         if (class_exists($tableClass, false)) {
-            return new $tableClass();
+            return new $tableClass($condition);
         }
         throw new \PDOException("RuntimeException: table '$table' not exists at database '$this->dbname'", E_USER_ERROR);
     }
@@ -247,6 +248,7 @@ class DB extends PDO {
             $this->generateTableModelProperty($class, 'cas_ver_col', $cols['column'], '');
             $this->generateTableModelProperty($class, 'set_col_values', $cols['column'], []);
             $this->generateTableModelProperty($class, 'record_values', $cols['column'], []);
+            $this->generateTableModelProperty($class, 'alias_name', $cols['column'], '');
             $class .= '}'. PHP_EOL;
         }
         return $class;

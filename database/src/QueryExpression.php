@@ -14,7 +14,7 @@ abstract class QueryExpression {
     const LP = '(';
     const RP = ')';
 
-    abstract function getExpression();
+    abstract public function getExpression();
 
     public function __toString() {
         return $this->getExpression();

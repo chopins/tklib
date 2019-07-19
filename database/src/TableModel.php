@@ -12,24 +12,25 @@ use Toknot\Database\DB;
 use Toknot\Database\QueryBuild;
 
 abstract class TableModel {
-    public static $tableAlias = '';
 
     public function __construct($condition = '') {
-        $this->one($condition);
+        if($condition) {
+            $this->findOne($condition);
+        }
     }
 
     protected function getCasVerColAttr() {
-        $pro = self::ATTR_CAS_VER_COL;
+        $pro = $this::ATTR_CAS_VER_COL;
         return $this->$pro;
     }
 
     protected function setCasVerColAttr($feilds) {
-        $pro = self::ATTR_CAS_VER_COL;
+        $pro = $this::ATTR_CAS_VER_COL;
         $this->$pro = $feilds;
     }
 
     protected function setRecordValues($key, $value = null) {
-        $pro = self::ATTR_RECORD_VALUES;
+        $pro = $this::ATTR_RECORD_VALUES;
         if(\is_array($key)) {
             $this->$pro = $key;
             return;
@@ -38,7 +39,7 @@ abstract class TableModel {
     }
 
     protected function getRecordValues($key = null) {
-        $pro = self::ATTR_RECORD_VALUES;
+        $pro = $this::ATTR_RECORD_VALUES;
         if(!$key) {
             return $this->$pro;
         }
@@ -46,7 +47,7 @@ abstract class TableModel {
     }
 
     protected function setFilterValues($key, $value = null) {
-        $pro = self::ATTR_SET_COL_VALUES;
+        $pro = $this::ATTR_SET_COL_VALUES;
         if(\is_array($key)) {
             $this->$pro = $key;
             return;
@@ -55,7 +56,7 @@ abstract class TableModel {
     }
 
     protected function getFilterValues($key = null) {
-        $pro = self::ATTR_SET_COL_VALUES;
+        $pro = $this::ATTR_SET_COL_VALUES;
         if(!$key) {
             return $this->$pro;
         }
@@ -63,8 +64,8 @@ abstract class TableModel {
     }
 
     public function __set($name, $value = '') {
-        if(\in_array(self::TABLE_COLUMN_LIST, $name)) {
-            throw new \PDOException("column '$name' not exists in " . self::TABLE_NAME);
+        if(\in_array($this::TABLE_COLUMN_LIST, $name)) {
+            throw new \PDOException("column '$name' not exists in " . $this::TABLE_NAME);
         }
         if(\is_scalar($value)) {
             $this->setRecordValues($name, $value);
@@ -73,8 +74,8 @@ abstract class TableModel {
     }
 
     public function __get($name) {
-        if(\in_array(self::TABLE_COLUMN_LIST, $name)) {
-            throw new \PDOException("column '$name' not exists in " . self::TABLE_NAME);
+        if(\in_array($this::TABLE_COLUMN_LIST, $name)) {
+            throw new \PDOException("column '$name' not exists in " . $this::TABLE_NAME);
         }
         return $this->getRecordValues($name);
     }
@@ -87,8 +88,20 @@ abstract class TableModel {
         return DB::connect();
     }
     public function idValue() {
-        $pkn = self::TABLE_KEY_NAME;
+        $pkn = $this::TABLE_KEY_NAME;
         return $this->$pkn;
+    }
+
+    public function getKeyName() {
+        return $this::TABLE_KEY_NAME;
+    }
+
+    public function getColumns() {
+        return $this::TABLE_COLUMN_LIST;
+    }
+
+    public function getCols() {
+        return $this::TABLE_COLS;
     }
 
     /**
@@ -169,7 +182,7 @@ abstract class TableModel {
      * @return string
      */
     public function tableName() {
-        return self::TABLE_NAME;
+        return $this::TABLE_NAME;
     }
 
     public function quote($string) {
@@ -181,7 +194,8 @@ abstract class TableModel {
      * @return string
      */
     public function getAlias() {
-        return self::$tableAlias;
+        $pro = $this::ATTR_ALIAS_NAME;
+        return $this->$pro;
     }
 
     /**
@@ -189,7 +203,8 @@ abstract class TableModel {
      * @param string $alias
      */
     public function setAlias($alias = '') {
-        self::$tableAlias = $alias ? $alias : self::TABLE_NAME;
+        $pro = $this::ATTR_ALIAS_NAME;
+        $this->$pro = $alias ? $alias : $this::TABLE_NAME;
     }
 
     /**
@@ -198,7 +213,7 @@ abstract class TableModel {
      * @param mixed $id
      * @return array
      */
-    public function one($id) {
+    public function findOne($id) {
         $query = $this->query();
         if (is_array($id)) {
             $and = $query->onAnd();
@@ -270,7 +285,7 @@ abstract class TableModel {
      */
     public function findGTId($id, $limit, $offset = 0) {
         $query = $this->query();
-        $exp = $query->col(self::TABLE_KEY_NAME)->gt($id);
+        $exp = $query->col($this::TABLE_KEY_NAME)->gt($id);
         return $query->where($exp)->range($offset, $limit)->all();
     }
 
@@ -284,7 +299,7 @@ abstract class TableModel {
      */
     public function findLTId($id, $limit, $offset = 0) {
         $query = $this->query();
-        $exp = $query->col(self::TABLE_KEY_NAME)->lt($id);
+        $exp = $query->col($this::TABLE_KEY_NAME)->lt($id);
         return $query->where($exp)->range($offset, $limit)->all();
     }
 
@@ -299,10 +314,11 @@ abstract class TableModel {
      */
     public function casUpdateById(array $param, $id, $casValue, $newValue) {
         $query = $this->query();
-        $exp1 = $query->col(self::TABLE_KEY_NAME)->eq($id);
-        $exp2 = $query->col(self::$casVerCol)->eq($casValue);
+        $casVerCol = $this->getCasVerColAttr();
+        $exp1 = $query->col($this::TABLE_KEY_NAME)->eq($id);
+        $exp2 = $query->col($casVerCol)->eq($casValue);
         $exp = $query->onAnd($exp1, $exp2);
-        $param[self::$casVerCol] = $newValue;
+        $param[$casVerCol] = $newValue;
         return $query->where($exp)->range(0, 1)->update($param);
     }
 
@@ -316,7 +332,7 @@ abstract class TableModel {
      */
     public function updateById(array $param, $id, $where = '') {
         $query = $this->query();
-        $exp1 = $query->col(self::TABLE_KEY_NAME)->eq($id);
+        $exp1 = $query->col($this::TABLE_KEY_NAME)->eq($id);
         $filter = $exp1;
         if ($where) {
             $and = $query->onAnd();
@@ -401,14 +417,14 @@ abstract class TableModel {
      */
     public function modify(array $param, $autoUpate = true, $casVer = 0, $newVer = 0) {
         $keys = array_keys($param);
-        if (isset($param[self::TABLE_KEY_NAME]) && (self::TABLE_AUTO_INCREMENT || $autoUpate)) {
-            $idValue = $param[self::TABLE_KEY_NAME];
+        if (isset($param[$this::TABLE_KEY_NAME]) && ($this::TABLE_AUTO_INCREMENT || $autoUpate)) {
+            $idValue = $param[$this::TABLE_KEY_NAME];
             if ($newVer && $casVer) {
                 $this->casUpdateById($param, $idValue, $casVer, $newVer);
             } else {
                 $this->updateById($param, $idValue);
             }
-        } elseif ($autoUpate && ($ainter = array_intersect($keys, self::TABLE_UNIQUE))) {
+        } elseif ($autoUpate && ($ainter = array_intersect($keys, $this::TABLE_UNIQUE))) {
             $query = $this->query();
             $and = $query->onAnd();
             foreach ($ainter as $col => $value) {
@@ -418,12 +434,14 @@ abstract class TableModel {
             }
             if ($casVer && $newVer) {
                 $and->arg($this->casExpression($query, $casVer));
-                $param[self::$casVerCol] = $newVer;
+                $casVerCol = $this->getCasVerColAttr();
+                $param[$casVerCol] = $newVer;
             }
             return $query->where($and)->range(0, 1)->update($param);
         } else {
             if ($newVer) {
-                $param[self::$casVerCol] = $newVer;
+                $casVerCol = $this->getCasVerColAttr();
+                $param[$casVerCol] = $newVer;
             }
             return $this->insert($param);
         }
@@ -436,7 +454,8 @@ abstract class TableModel {
      * @return \Toknot\Database\Expression
      */
     public function casExpression(QueryBuild $query, $casVer) {
-        return $query->col(self::$casVerCol)->eq($casVer);
+        $casVerCol = $this->getCasVerColAttr();
+        return $query->col($casVerCol)->eq($casVer);
     }
 
     /**
