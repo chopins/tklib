@@ -216,7 +216,7 @@ class DB extends PDO {
             }
         }
 
-        $class = '<?php /* Auto generate by toknot at Date:' . date('Y-m-d H:i:s') . ' */' . PHP_EOL;
+        $class = '<?php /* Auto generate by toknot at Date:' . date('Y-m-d H:i:s T') . ' */' . PHP_EOL;
        
         $class .= 'namespace ' . $this->tableModelNamespace() . ';';
         $class .= 'use ' . TableModel::class . ';' . PHP_EOL;
