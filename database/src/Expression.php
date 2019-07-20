@@ -6,7 +6,7 @@
  * @copyright  Copyright (c) 2011 - 2018 chopin xiao (xiao@toknot.com)
  */
 
-namespace Toknot\Lib\Model\Database;
+namespace Toknot\Database;
 
 use Toknot\Database\QueryExpression;
 

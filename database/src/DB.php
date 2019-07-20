@@ -3,51 +3,80 @@
 /**
  * Toknot (http://toknot.com)
  *
- * @copyright  Copyright (c) 2011 - 2018 chopin xiao (xiao@toknot.com)
+ * @copyright  Copyright (c) 2011 - 2019 chopin xiao (xiao@toknot.com)
  */
 
 namespace Toknot\Database;
 
 use PDO;
+use Toknot\Database\Exception\DBException;
 
 /**
  * @static
  */
 class DB extends PDO {
 
-    private static $ins = null;
-    private static $last = '';
     private $dbname = '';
     private $tablePrefix = '';
     private $tableModelCacheFile = '';    
     private $modelCacheLoad = false;
     private $sessionQueryAutocommitChanged = false;
-    public $tableLimit = 100;
+    private $serverId = '';
+    private $lastSql = '';
+    private static $lastServerId = '';
+    private static $ins = null;
     public static $forceFlushDatabaseCache = false;
-    public $cacheDir = '';
-
+    public $tableLimit = 100;
     const NS = '\\';
-    const DB_ATTR_CACHE_DIR = 'db_cache_dir';
-    const DB_ATTR_TABLE_PREFIX = 'db_table_prefix';
+    const DB_ATTR_TABLE_PREFIX = 'DB_TABLE_PREFIX';
+    const DB_ATTR_SERVER_ID = 'DB_SERVER_ID';
 
-    public function __construct($dsn, $username = null, $pw = null, $option = []) {
+    public function __construct($dsn, $cacheDir, $username = null, $pw = null, $option = []) {
         parent::__construct($dsn, $username, $pw, $option);
         $this->queryDBName();
-        $this->generateCacheFile($option);
+        $this->setServerKey($option);
+        $this->generateCacheFile($cacheDir);
         $this->setTablePrefix($option);
         $this->flushDatabaseCache();
-        self::$ins = $this;
+        self::$ins[$this->serverId] = $this;
+        self::$lastServerId = $this->serverId;
     }
 
-    protected function generateCacheFile($option) {
-        if(isset($option[self::DB_ATTR_CACHE_DIR])) {
-            $cacheDir = $option[self::DB_ATTR_CACHE_DIR];
-            $this->tableModelCacheFile = $cacheDir . DIRECTORY_SEPARATOR . $this->dbname . '.php';
+    protected function setServerKey($option) {
+        if(isset($option[self::DB_ATTR_SERVER_ID])) {
+            $this->serverId = $option[self::DB_ATTR_SERVER_ID];
+        } else {
+            $this->serverId = md5($this->getAttribute(self::ATTR_CONNECTION_STATUS));
         }
     }
 
-    public static function connect() {
-        return self::$ins;
+    protected function generateCacheFile($cacheDir) {
+        $serverDir = $cacheDir . DIRECTORY_SEPARATOR . $this->serverId;
+        if(!\file_exists($serverDir)) {
+            mkdir($serverDir);
+        }
+        $this->tableModelCacheFile = $serverDir . DIRECTORY_SEPARATOR . $this->dbname . '.php';
+    }
+
+    public static function connect($serverId = '') {
+        $id = $serverId ? $serverId : self::$lastServerId;
+        $instance = self::$ins[$id];
+        if(!$instance) {
+            throw new DBException('db instance is null');
+        }
+        return $instance;
+    }
+
+    public static function getLastServerId() {
+        return self::$lastServerId;
+    }
+
+    public function getServerId() {
+        return $this->serverId;
+    }
+
+    public function getLastSql() {
+        return $this->lastSql;
     }
 
     protected function setTablePrefix($option) {
@@ -99,9 +128,9 @@ class DB extends PDO {
 
         $tableClass = $this->tableModelNamespace() . self::NS . self::symbolConvert($table);
         if (class_exists($tableClass, false)) {
-            return new $tableClass($condition);
+            return new $tableClass($this->serverId, $condition);
         }
-        throw new \PDOException("RuntimeException: table '$table' not exists at database '$this->dbname'", E_USER_ERROR);
+        throw new DBException("table '$table' not exists at database '$this->dbname'");
     }
 
     public function tableNumber() {
@@ -147,6 +176,38 @@ class DB extends PDO {
 
     public static function symbolConvert($name) {
         return str_replace('_', '', ucwords($name, '_'));
+    }
+
+    /**
+     * 
+     * @return \PDOStatement
+     */
+    public function executeSelectOrUpdate(QueryBuild $queryBuild) {
+        $sql = $queryBuild->getSQL();
+        $sth = $this->prepare($sql);
+        $bindParameter = $queryBuild->getParameterValue();
+        foreach ($bindParameter as $i => $bind) {
+            if (is_array($bind)) {
+                $param = $bind[1];
+                $isNum = $bind[0];
+            } else {
+                $param = $bind;
+                $isNum = false;
+            }
+            if (is_numeric($i)) {
+                $sth->bindValue($i + 1, $param, DB::PARAM_STR);
+            } else {
+                $res = $sth->bindValue($i, $param, $isNum ? DB::PARAM_INT : DB::PARAM_STR);
+            }
+        }
+        $res = $sth->execute();
+        $this->lastSql = $sql;
+        if (!$res) {
+            $errInfo = $sth->errorInfo();
+            throw new DBException('Database query error', $errInfo[1], $errInfo[2], $sql, $bindParameter);
+        }
+        $queryBuild->cleanBindParameter();
+        return $sth;
     }
 
     protected function tableModelString() {
@@ -218,8 +279,8 @@ class DB extends PDO {
         }
 
         $class = '<?php /* Auto generate by toknot at Date:' . date('Y-m-d H:i:s T') . ' */' . PHP_EOL;
-       
-        $class .= 'namespace ' . $this->tableModelNamespace() . ';';
+        $namespace = $this->tableModelNamespace();
+        $class .= 'namespace ' . $namespace . ';';
         $class .= 'use ' . TableModel::class . ';' . PHP_EOL;
         foreach ($tableList as $tableName => $cols) {
             if ($cols['mul']) {
@@ -227,28 +288,34 @@ class DB extends PDO {
             } else {
                 $keys = [];
             }
-            $tableNameClass = $tableName;
+            $tableIdName = $tableName;
             if ($this->tablePrefix) {
-                $tableNameClass = substr($tableName, strlen($this->tablePrefix));
+                $tableIdClass = substr($tableIdName, strlen($this->tablePrefix));
             }
+            $tableClassName = self::symbolConvert($tableIdClass);
+            $tableFullClassName = "\\$namespace\\$tableClassName";
             $this->generateTablePropertyComment($class, $cols['columnInfo']);
-            $class .= 'class ' . self::symbolConvert($tableNameClass) . ' extends TableModel {'  . PHP_EOL;
+            $class .= 'class ' . $tableClassName . ' extends TableModel {'  . PHP_EOL;
             $sep = '`, `';
             $class .= $this->generateTableConst('TABLE_SELECT_FEILD', '`' . join($sep, $cols['column']) . '`');
-            $class .= $this->generateTableConst('TABLE_COLUMN_LIST', $cols['column'], true);
+            $class .= $this->generateTableConst('TABLE_COLUMN_LIST', $cols['column']);
             $class .= $this->generateTableConst('TABLE_AUTO_INCREMENT', $cols['ai']);
-            $class .= $this->generateTableConst('TABLE_UNIQUE', $cols['uni'], true);
+            $class .= $this->generateTableConst('TABLE_UNIQUE', $cols['uni']);
+            $class .= $this->generateTableConst('TABLE_CLASS_NAME', 'self::class', true);
             if ($keys) {
-                $class .= $this->generateTableConst('TABLE_INDEX', array_merge($keys['mulIndex']), true);
-                $class .= $this->generateTableConst('TABLE_MUL_UNIQUE', $keys['mulUni'], true);
+                $class .= $this->generateTableConst('TABLE_INDEX', array_merge($keys['mulIndex']));
+                $class .= $this->generateTableConst('TABLE_MUL_UNIQUE', $keys['mulUni']);
             }
-            $class .= $this->generateTableConst('TABLE_COLS', $cols['columnInfo'], true);
+            $class .= $this->generateTableConst('TABLE_COLS', $cols['columnInfo']);
             $class .= $this->generateTableConst('TABLE_NAME', $tableName);
             $class .= $this->generateTableConst('TABLE_KEY_NAME', $cols['key']);
             $this->generateTableModelProperty($class, 'cas_ver_col', $cols['column'], '');
             $this->generateTableModelProperty($class, 'set_col_values', $cols['column'], []);
             $this->generateTableModelProperty($class, 'record_values', $cols['column'], []);
+            $this->generateTableModelProperty($class, 'filter_values', $cols['column'], []);
             $this->generateTableModelProperty($class, 'alias_name', $cols['column'], '');
+            $this->generateTableModelProperty($class, 'server_id', $cols['column'], '');
+            $this->generateTableModelProperty($class, 'new_record', $cols['column'], true);
             $class .= '}'. PHP_EOL;
         }
         return $class;
@@ -263,19 +330,30 @@ class DB extends PDO {
         $this->dbname = $this->query('SELECT database()')->fetchColumn();
     }
 
-    protected function generateTableConst($const, $expression) {
-        return 'CONST ' . strtoupper($const) . '=' . var_export($expression, true) . ';' . PHP_EOL;
+    protected function generateTableConst($const, $expression, $isCode = false) {
+        $expCode = $isCode ? $expression : var_export($expression, true);
+        if(\is_array($expression)) {
+            $expCode = \str_replace("    ", ' ', $expCode);
+            $expCode = \str_replace("(\n", '(', $expCode);
+            $expCode = \str_replace(",\n", ',', $expCode);
+        }
+        return 'CONST ' . strtoupper($const) . '=' . $expCode . ';' . PHP_EOL;
     }
-
    
     protected function generateTableModelProperty(&$class, $specProp, $cols, $def = '') {
         do {
-            $name = '_' . md5(\microtime());
+            $name = '_' . md5(\microtime().\mt_rand(0,100000));
         }while(\in_array($name, $cols));
         
         $specProp = 'ATTR_' . \strtoupper($specProp);
         $class .= $this->generateTableConst($specProp, $name);
-        $class .= "public \${$name} = ". \var_export($def, true). ";".PHP_EOL;
+        $expCode = \var_export($def, true);
+        if(\is_array($def)) {
+            $expCode = \str_replace("    ", ' ', $expCode);
+            $expCode = \str_replace("(\n", '(', $expCode);
+            $expCode = \str_replace(",\n", ',', $expCode);
+        }
+        $class .= "public \${$name} = ". $expCode . ";".PHP_EOL;
     }
     protected function generateTablePropertyComment(&$class, $cols) {
         $class .= '/*' . PHP_EOL;

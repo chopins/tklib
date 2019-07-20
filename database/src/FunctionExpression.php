@@ -6,7 +6,7 @@
  * @copyright  Copyright (c) 2011 - 2018 chopin xiao (xiao@toknot.com)
  */
 
-namespace Toknot\Lib\Model\Database;
+namespace Toknot\Database;
 
 use Toknot\Database\DB;
 use Toknot\Database\QueryExpression;
@@ -39,14 +39,14 @@ class FunctionExpression extends QueryExpression {
     }
 
     public function getExpression() {
-        return self::SP . $this->func . self::LP . join(',', $this->arg) . self::RP . self::SP;
+        return ' '. $this->func . '(' . join(',', $this->arg) . ')' . ' ';
     }
 
     protected function filterScalar($v) {
         if (!is_scalar($v)) {
             return $v;
         }
-        return DB::instance()->quote($v);
+        return DB::connect()->quote($v);
     }
 
 }

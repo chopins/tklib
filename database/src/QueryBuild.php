@@ -67,6 +67,7 @@ class QueryBuild extends QueryExpression {
     const FOR_UPDATE = ' FOR UPDATE';
     const I_INDEX = ' IGNORE INDEX';
     const WHERE = ' WHERE ';
+    const LOGICAL_EXP = ['AND', 'OR', 'XOR'];
 
     /**
      *
@@ -104,7 +105,7 @@ class QueryBuild extends QueryExpression {
     }
 
     public function getExpression() {
-
+        return $this->getSQL();
     }
 
     public function __clone() {
@@ -321,6 +322,35 @@ class QueryBuild extends QueryExpression {
     }
 
     /**
+     * ['key' => v]
+     * ['AND',[]]
+     * 
+     */
+    public function hashQuery(array $array, $logicalExp = 'AND') {
+        $logic = new LogicalExpression($logicalExp);
+        foreach($array as $k => $v) {
+            if(!is_numeric($k) && \is_scalar($v)) {
+                $exp = $this->col($k)->eq($v);
+                $logic->arg($exp);
+            } elseif(!\is_numeric($k) && \is_array($v)) {
+                $exp = $this->col($k)->expression($v[0], $v[1]);
+                $logic->arg($exp);
+            } elseif(\is_numeric($k) && \is_array($v)) {
+                $logicStr = \strtoupper($v[0]);
+                if(\in_array($logicStr, self::LOGICAL_EXP)) {
+                    $sub = $this->hashQuery($v, $v[0]);
+                } else {
+                    $sub = $this->expression($logicStr, $v[1],$v[2]);
+                }
+                $logic->arg($sub);
+            } elseif(is_numeric($k) && \is_string($v) && !\is_numeric($v)) {
+                $logic->arg($v);
+            }
+        }
+        return $logic;
+    }
+
+    /**
      * 
      * @param string|QueryExpression $condition 
      * @param mixed $value
@@ -334,6 +364,8 @@ class QueryBuild extends QueryExpression {
             $this->whereSQL = $col->eq($value);
         } elseif (is_subclass_of($condition, QueryExpression::class)) {
             $this->whereSQL = $condition->getExpression();
+        } elseif(is_array($condition)) {
+            $this->whereSQL = $this->hashQuery($condition)->getExpression();
         } elseif ($condition !== null) {
             throw new \PDOException('unsupport condition in QueryBuild::where()', E_USER_WARNING);
         }
@@ -542,7 +574,7 @@ class QueryBuild extends QueryExpression {
         }
         if ($this->sqlType == self::SELECT) {
             if (empty($this->leftFeildsList)) {
-                $selectFeild = $this->tableModel->getSelectFeild();
+                $selectFeild = $this->tableModel->getQueryField();
             } else {
                 $selectFeild = join(',', $this->leftFeildsList);
             }

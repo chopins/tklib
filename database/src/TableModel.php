@@ -3,79 +3,104 @@
 /**
  * Toknot (http://toknot.com)
  *
- * @copyright  Copyright (c) 2011 - 2018 chopin xiao (xiao@toknot.com)
+ * @copyright  Copyright (c) 2011 - 2019 chopin xiao (xiao@toknot.com)
  */
 
 namespace Toknot\Database;
 
 use Toknot\Database\DB;
 use Toknot\Database\QueryBuild;
+use Toknot\Database\Exception\DBException;
 
 abstract class TableModel {
 
-    public function __construct($condition = '') {
+    public function __construct($serverid, $condition = '') {
+        $this->setServerId($serverid);
         if($condition) {
             $this->findOne($condition);
         }
+        return $this;
     }
 
-    protected function getCasVerColAttr() {
-        $pro = $this::ATTR_CAS_VER_COL;
+    public function getTableConst($name) {
+        $className = $this::TABLE_CLASS_NAME;
+        return \constant("$className::$name");
+    }
+
+    private function setAttributes($name, $key = null, $value = null) {
+        $pro = $this->getTableConst($name);
+        if(\is_array($key)) {
+            $this->$pro = $key;
+            return;
+        } elseif(!$key) {
+            $this->$pro = $value;
+            return;
+        }
+        $this->$pro[$key] = $value;
+    }
+    private function getAttributes($name, $key = null) {
+        $pro = $this->getTableConst($name);
+        if($key) {
+            return $this->$pro[$key];
+        }
         return $this->$pro;
     }
 
+    protected function setServerId($serverid) {
+        $this->setAttributes('ATTR_SERVER_ID', null, $serverid);
+    }
+
+    protected function getCasVerColAttr() {
+        return $this->getAttributes('ATTR_CAS_VER_COL');
+    }
+
     protected function setCasVerColAttr($feilds) {
-        $pro = $this::ATTR_CAS_VER_COL;
-        $this->$pro = $feilds;
+        $this->setAttributes('ATTR_CAS_VER_COL', null, $feilds);
     }
 
     protected function setRecordValues($key, $value = null) {
-        $pro = $this::ATTR_RECORD_VALUES;
-        if(\is_array($key)) {
-            $this->$pro = $key;
-            return;
-        }
-        $this->$pro[$key] = $value;
+        $this->setAttributes('ATTR_RECORD_VALUES', $key, $value);
     }
 
     protected function getRecordValues($key = null) {
-        $pro = $this::ATTR_RECORD_VALUES;
-        if(!$key) {
-            return $this->$pro;
-        }
-        return $this->$pro[$key];
+        return $this->getAttributes('ATTR_RECORD_VALUES', $key);
+    }
+
+    protected function setColsValues($key, $value = null) {
+        $this->setAttributes('ATTR_SET_COL_VALUES', $key, $value);
+    }
+
+    protected function getColsValues($key = null) {
+        return $this->getAttributes('ATTR_SET_COL_VALUES', $key);
     }
 
     protected function setFilterValues($key, $value = null) {
-        $pro = $this::ATTR_SET_COL_VALUES;
-        if(\is_array($key)) {
-            $this->$pro = $key;
-            return;
-        }
-        $this->$pro[$key] = $value;
+        return $this->setAttributes('ATTR_FILTER_VALUES', $key, $value);
     }
 
     protected function getFilterValues($key = null) {
-        $pro = $this::ATTR_SET_COL_VALUES;
-        if(!$key) {
-            return $this->$pro;
-        }
-        return $this->$pro[$key];
+        return $this->getAttributes('ATTR_FILTER_VALUES', $key);
+    }
+
+    public function getLastSql() {
+        return $this->db()->getLastSql();
     }
 
     public function __set($name, $value = '') {
-        if(\in_array($this::TABLE_COLUMN_LIST, $name)) {
-            throw new \PDOException("column '$name' not exists in " . $this::TABLE_NAME);
+        if(!\in_array($name, $this::TABLE_COLUMN_LIST)) {
+            throw new DBException("column '$name' not exists in table `" . $this::TABLE_NAME.'`');
         }
         if(\is_scalar($value)) {
             $this->setRecordValues($name, $value);
+            $this->setColsValues($name, $value);
+        } else {
+            $this->setFilterValues($name, $value);
         }
-        $this->setFilterValues($name, $value);
     }
 
     public function __get($name) {
-        if(\in_array($this::TABLE_COLUMN_LIST, $name)) {
-            throw new \PDOException("column '$name' not exists in " . $this::TABLE_NAME);
+        if(!\in_array($name, $this::TABLE_COLUMN_LIST)) {
+            throw new DBException("column '$name' not exists in table `" . $this::TABLE_NAME . '`');
         }
         return $this->getRecordValues($name);
     }
@@ -84,12 +109,18 @@ abstract class TableModel {
      * 
      * @return \Toknot\Database\DB
      */
-    public function db() {
-        return DB::connect();
+    public function db($serverid = '') {
+        $id = $serverid ? $serverid : $this->getAttributes('ATTR_SERVER_ID');
+        $this->setServerId($id);
+        return DB::connect($id);
     }
+
+    public function executeSelectOrUpdate(QueryBuild $queryBuild) {
+        return $this->db()->executeSelectOrUpdate($queryBuild);
+    }
+
     public function idValue() {
-        $pkn = $this::TABLE_KEY_NAME;
-        return $this->$pkn;
+        return $this->getAttributes('TABLE_KEY_NAME');
     }
 
     public function getKeyName() {
@@ -104,55 +135,31 @@ abstract class TableModel {
         return $this::TABLE_COLS;
     }
 
+    public function getUnique() {
+        return $this::TABLE_UNIQUE;
+    }
+
+    public function getQueryField() {
+        return $this::TABLE_SELECT_FEILD;
+    }
+
+    public function getIndex() {
+        return $this::TABLE_INDEX;
+    }
+
+    public function isNewRecord() {
+        return $this->getAttributes('ATTR_NEW_RECORD');
+    }
+    public function setNewRecord($status = true) {
+        $this->setAttributes('ATTR_NEW_RECORD', null, $status);
+    }
+
     /**
      * 
      * @return int
      */
     public function lastInsertId() {
         return $this->db()->lastInsertId();
-    }
-
-    /**
-     * 
-     * @return \PDOStatement
-     */
-    public function executeSelectOrUpdate(QueryBuild $queryBuild) {
-        $sql = $queryBuild->getSQL();
-        $sth = $this->db()->prepare($sql);
-        $bindParameter = $queryBuild->getParameterValue();
-        foreach ($bindParameter as $i => $bind) {
-            if (is_array($bind)) {
-                $param = $bind[1];
-                $isNum = $bind[0];
-            } else {
-                $param = $bind;
-                $isNum = false;
-            }
-            if (is_numeric($i)) {
-                $sth->bindValue($i + 1, $param, DB::PARAM_STR);
-            } else {
-                $res = $sth->bindValue($i, $param, $isNum ? DB::PARAM_INT : DB::PARAM_STR);
-            }
-        }
-        $res = $sth->execute();
-        if (!$res) {
-            $errInfo = $sth->errorInfo();
-            $errData = [$errInfo[1], "SQLSTATE[$errInfo[0]] $errInfo[2]", $sql, $bindParameter];
-            throw new \PDOException("SQLSTATE[$errInfo[0]] $errInfo[2]:(SQL: $sql);PARAMS:" . \var_export($bindParameter));
-        }
-        $queryBuild->cleanBindParameter();
-        return $sth;
-    }
-
-    
-
-    /**
-     * 
-     * @param string $name
-     * @return int
-     */
-    public function lastId($name = '') {
-        return $this->db()->lastInsertId($name);
     }
 
     /**
@@ -211,44 +218,42 @@ abstract class TableModel {
      * find one row
      * 
      * @param mixed $id
-     * @return array
+     * @return $this
      */
     public function findOne($id) {
         $query = $this->query();
         if (is_array($id)) {
-            $and = $query->onAnd();
-            foreach ($id as $col => $v) {
-                $and->arg($query->col($col)->eq($v));
-            }
-
-            $list = $query->where($and)->limit(1)->row();
+            $list = $query->where($id)->limit(1)->row();
         } else {
             $list = $query->findOne($id);
         }
-        $this->setRecordValues($list);
-        return $this;
-    }
-
-    public function isNewRecord() {
-        return empty($this->getRecordValues());
+        if($list) {
+            $this->setRecordValues($list);
+            $this->setNewRecord(false);
+            return $this;
+        } else {
+            return null;
+        }
     }
 
     public function save() {
-        if($this->isNewRecord()) {
-            $this->insert($this->getRecordValues());
+        $isNewRecord = $this->isNewRecord();
+        if($isNewRecord) {
+            $res = $this->insert($this->getRecordValues());
+            $this->lastInsertId();
+            $this->findOne($res);
         } else {
-            $filter = $this->getFilterValues();
-            $updateData = [];
-            $where = [];
-            foreach ($filter as $key => $value) {
-                if(\is_scalar($value)) {
-                    $updateData[$key] = $value;
-                } else {
-                    $where[$key] = $value;
-                }
+            $updateData = $this->getColsValues();
+            if($isNewRecord) {
+                throw new DBException('record not exitss');
+            } else {
+                $filter = $this->getFilterValues();
+                $id = $this->idValue();
+                $res = $this->updateById($updateData, $id, $filter);
+                $this->findOne($id);
             }
-            $this->updateById($updateData, $this->idValue(), $where);
         }
+        return $res;
     }
 
     /**
@@ -270,9 +275,11 @@ abstract class TableModel {
      * @param int $offset
      * @return array
      */
-    public function findAll($limit, $offset = 0) {
+    public function findAll($where = '', $limit = 10, $offset = 0) {
         $query = $this->query();
-        return $query->range($offset, $limit)->all();
+        $filter = $this->getFilterValues();
+        $filter[] = $where;
+        return $query->range($offset, $limit)->where($filter)->all();
     }
 
     /**
@@ -283,7 +290,7 @@ abstract class TableModel {
      * @param int $offset
      * @return array
      */
-    public function findGTId($id, $limit, $offset = 0) {
+    public function findGTId($id, $limit = 10, $offset = 0) {
         $query = $this->query();
         $exp = $query->col($this::TABLE_KEY_NAME)->gt($id);
         return $query->where($exp)->range($offset, $limit)->all();
@@ -297,7 +304,7 @@ abstract class TableModel {
      * @param int $offset
      * @return array
      */
-    public function findLTId($id, $limit, $offset = 0) {
+    public function findLTId($id, $limit = 10, $offset = 0) {
         $query = $this->query();
         $exp = $query->col($this::TABLE_KEY_NAME)->lt($id);
         return $query->where($exp)->range($offset, $limit)->all();
@@ -330,17 +337,29 @@ abstract class TableModel {
      * @param int $where
      * @return int
      */
-    public function updateById(array $param, $id, $where = '') {
+    public function updateById(array $data, &$id, $where = '') {
         $query = $this->query();
         $exp1 = $query->col($this::TABLE_KEY_NAME)->eq($id);
         $filter = $exp1;
         if ($where) {
             $and = $query->onAnd();
             $and->arg($exp1);
-            $and->arg($where);
+            if(\is_array($where)) {
+                $and->arg($query->hashQuery($where));
+            } else {
+                $and->arg($where);
+            }
             $filter = $and;
         }
-        return $query->where($filter)->range(0, 1)->update($param);
+        if(isset($data[$this::TABLE_KEY_NAME])) {
+            $id = $data[$this::TABLE_KEY_NAME];
+        }
+        return $query->where($filter)->range(0, 1)->update($data);
+    }
+
+    public function update($data, $filter) {
+        $query = $this->query();
+        return $query->where($filter)->update($data);
     }
 
     /**

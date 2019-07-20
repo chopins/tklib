@@ -6,9 +6,10 @@
  * @copyright  Copyright (c) 2011 - 2018 chopin xiao (xiao@toknot.com)
  */
 
-namespace Toknot\Lib\Model\Database;
+namespace Toknot\Database;
 
 use Toknot\Database\QueryExpression;
+use Toknot\Database\Expression;
 
 class LogicalExpression extends QueryExpression {
 
@@ -37,6 +38,9 @@ class LogicalExpression extends QueryExpression {
     }
 
     public function sortCall($a, $b) {
+        if(!$a instanceof Expression || !$b instanceof Expression) {
+            return 0;
+        }
         if (($res = $this->indexTypeCall($a, $b, 'hasKey')) !== null) {
             return $res;
         } elseif (($res = $this->indexTypeCall($a, $b, 'hasUnique')) !== null) {
