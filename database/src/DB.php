@@ -316,6 +316,7 @@ class DB extends PDO {
             $this->generateTableModelProperty($class, 'alias_name', $cols['column'], '');
             $this->generateTableModelProperty($class, 'server_id', $cols['column'], '');
             $this->generateTableModelProperty($class, 'new_record', $cols['column'], true);
+            $this->generateTableModelProperty($class, 'record_offset', $cols['column'], 0);
             $class .= '}'. PHP_EOL;
         }
         return $class;

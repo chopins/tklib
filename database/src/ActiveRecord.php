@@ -14,14 +14,6 @@ use Toknot\Boot\Kernel;
 
 class ActiveRecord implements Iterator, ArrayAccess {
 
-    protected $table = null;
-    protected $currentRecord = [];
-    protected $columns = [];
-    protected $newRecordData = [];
-    protected $idValue = '';
-    protected $idName = '';
-    protected $iteratorKey = '';
-
     public function __construct(TableModel $table, $record) {
         $this->table = $table;
         $this->currentRecord = $record;

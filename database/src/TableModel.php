@@ -8,11 +8,13 @@
 
 namespace Toknot\Database;
 
+use Iterator;
+use ArrayAccess;
 use Toknot\Database\DB;
 use Toknot\Database\QueryBuild;
 use Toknot\Database\Exception\DBException;
 
-abstract class TableModel {
+abstract class TableModel implements Iterator, ArrayAccess{
 
     public function __construct($serverid, $condition = '') {
         $this->setServerId($serverid);
@@ -497,4 +499,52 @@ abstract class TableModel {
         }
     }
 
+    public function toArray() {
+        return $this->getRecordValues();
+    }
+
+    public function rewind() {
+        $idx = $this->getTableConst('ATTR_RECORD_OFFSET');
+        $this->$idx = 0;
+        $pro = $this->getTableConst('ATTR_RECORD_VALUES');
+        reset($this->$pro);
+    }
+
+    public function current() {
+        $pro = $this->getTableConst('ATTR_RECORD_VALUES');
+        return current($this->$pro);
+    }
+
+    public function key() {
+        $pro = $this->getTableConst('ATTR_RECORD_VALUES');
+        $idx = $this->getTableConst('ATTR_RECORD_OFFSET');
+        $this->$idx = key($this->$pro);
+        return $this->$idx;
+    }
+
+    public function next() {
+        $pro = $this->getTableConst('ATTR_RECORD_VALUES');
+        next($this->$pro);
+    }
+
+    public function valid() {
+        $idx = $this->getTableConst('ATTR_RECORD_OFFSET');
+        return \in_array($idx, $this::TABLE_COLUMN_LIST);
+    }
+
+    public function offsetExists($offset) {
+        return \in_array($offset, $this::TABLE_COLUMN_LIST);
+    }
+
+    public function offsetGet($offset) {
+        return $this->__get($offset);
+    }
+
+    public function offsetSet($offset, $value) {
+        return $this->__set($offset, $value);
+    }
+
+    public function offsetUnset($offset) {
+        throw new DBException('can not unset a property of table ' . get_class($this->table), E_USER_NOTICE);
+    }
 }
