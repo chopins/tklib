@@ -44,25 +44,196 @@ function sortBySubVal(array &$arr, $subKey, $sortFlag = SORT_REGULAR, $reverse =
  * @param int $offset       偏移量，如果是负数，将查找以开始字符串最后出现的位置为起点
  * @return string|bool      返回false即未找到
  */
-function strFind(string $content, array $start, $end, $offset) {
-    if($offset < 0) {
-        $startPos = mb_strrpos($content, $start[0], $offset);
+function strFind(string $content, $start, $end, $offset, &$findPos = 0) {
+    if(is_string($start)) {
+        $startlen = mb_strlen($start);
     } else {
-        $startPos = mb_strpos($content, $start[0], $offset);
+        $startlen = $start[0];
+        $start = $start[1];
+    }
+    if($offset < 0) {
+        $startPos = mb_strrpos($content, $start, $offset);
+    } else {
+        $startPos = mb_strpos($content, $start, $offset);
     }
     if($startPos === false) {
         return false;
     }
-    $endPos = mb_strpos($content, $end, $startPos + $start[1]);
+    $endPos = mb_strpos($content, $end, $startPos + $startlen);
     if($endPos === false) {
         return false;
     }
-    return trim(mb_substr($content, $startPos + $start[1], $endPos - $startPos - $start[1]));
+    $findPos = $startPos;
+    return trim(mb_substr($content, $startPos + $startlen, $endPos - $startPos - $startlen));
 }
 
-function getVideoMeta($file, &$returnVar = 0) {
+class SmartStrPos {
+    private $offset = 0;
+    private $trail = 0;
+    private $content = '';
+    private $contentLen = 0;
+    private $bakContent;
+    public function __construct(string $content, string $needle, int $offset = 0, bool $pre = false) {
+        $this->content = $content;
+        $this->contentLen = mb_strlen($content);
+        $this->bakContent = $this->content;
+        if(!$pre) {
+            $this->next($needle);
+        }
+    }
+    public function reset() {
+        $this->offset = 0;
+        $this->trail  = 0;
+        $this->content = $this->bakContent;
+    }
+
+    public function limit($needle) {
+        if($needle === 0) {
+            $this->content = $this->bakContent;
+            return 0;
+        } elseif(is_int($needle)) {
+            $this->content = mb_substr($this->content,0, $needle);
+            return $needle;
+        }
+        $limit = mb_strpos($this->content, $needle);
+        $this->content = mb_substr($this->content,0, $limit);
+        return $limit;
+    }
+
+    private function trailPos(string $needle) {
+        $this->trail = $this->offset + mb_strlen($needle);
+    }
+    public function back(string $needle, bool $movie = true) {
+        $coffset = mb_strrpos($this->content, $needle , $this->offset - $this->contentLen);
+        if($coffset !== false && $movie) {
+            $this->offset  =$coffset;
+            $this->trailPos($needle);
+        }
+        return $coffset;
+    }
+
+    public function next(string $needle) {
+        $coffset = mb_strpos($this->content, $needle, $this->trail);
+        if($coffset !== false) {
+            $this->offset  = $coffset;
+            $this->trailPos($needle);
+        }
+        return  $coffset;
+    }
+
+    public function nextSub(string $start, string $end, $move = false) {
+        $findPos = 0;
+        $str = strFind($this->content, $start, $end, $this->trail, $findPos);
+        if($move && $str) {
+            $this->offset = $findPos;
+            $this->trailPos($str);
+        }
+        return $str;
+    }
+
+    public function backSub(string $start, string $end, $move = false) {
+        $findPos = 0;
+        $str = strFind($this->content, $start, $end, $this->offset - $this->contentLen, $findPos);
+        if($move && $str) {
+            $this->offset = $findPos;
+            $this->trailPos($str);
+        }
+        return $str;
+    }
+
+    /**
+     * 会移动偏移量
+     *
+     * @param string $start
+     * @param string $end
+     * @return SmartStrPos
+     */
+    public function nextRange(string $start, string $end) {
+        $str = $this->nextSub($start, $end,  true);
+        if($str) {
+            return self::begin($str);
+        }
+        return false;
+    }
+
+    public function backRange(string $start, string $end) {
+        $str = $this->backSub($start, $end, true);
+        if($str) {
+            return self::begin($str);
+        }
+        return false;
+    }
+
+    protected function match($str, $suffixArr, $offset, &$len) {
+        $pos = false;
+        foreach($suffixArr as $suffix) {
+            $len = mb_strlen($str.$suffix);
+            $pos = mb_strpos($this->content, $str.$suffix, $offset);
+            if($pos) {
+                break;
+            }
+        }
+        return $pos;
+    }
+
+    public function nextPair($startPairFlag, $startPair,$endPair) {
+        return $this->nextPairMatch($startPairFlag, $startPair, null, $endPair, null);
+    }
+
+    public function nextPairMatch($startPairFlag, $startPair, ?array $startPairSuffix, $endPair, ?array $endPairSuffix) {
+        $startPos = $this->next($startPairFlag);
+        $endPosOffset = $pairPosOffset = $startPos;
+        $pairLen = 0;
+
+        $endPairLen = mb_strlen($endPair);
+        do {
+            if($endPairSuffix) {
+                $endPos = $this->match($endPair, $endPairSuffix, $endPosOffset, $endPairLen);
+            } else {
+                $endPos = mb_strpos($this->content, $endPair, $endPosOffset);
+            }
+            if(!$endPos) {
+                return false;
+            }
+            if($startPairSuffix) {
+                $pairPos = $this->match($startPair, $startPairSuffix, $pairPosOffset, $pairLen);
+            } else {
+                $pairPos = mb_strpos($this->content, $startPair, $pairPosOffset);
+            }
+
+            if($pairPos > $endPos) {
+                $str = mb_substr($this->content, $startPos + mb_strlen($startPairFlag), $endPos);
+                $this->offset = $startPos;
+                $this->trail = $endPos + mb_strlen($endPair);
+                return self::begin($str);
+            } elseif($pairPos === $endPos) {
+                trigger_error('start and end pair name is ambiguous', E_USER_WARNING);
+                return false;
+            }
+            $endPosOffset = $endPos + $endPairLen;
+            $pairPosOffset = $pairPos + $pairLen;
+        } while(true);
+    }
+
+    public function trail() {
+        return $this->trail;
+    }
+    public function pos() {
+        return $this->offset;
+    }
+
+    public static function begin(string $content) {
+        return new static($content, '', 0, true);
+    }
+}
+
+function smartStrPos(string $content, string $needle, int $offset = 0) {
+    return new SmartStrPos($content, $needle, $offset);
+}
+
+function getVideoMeta($file, &$returnVar = 0) : array {
     $command = "ffmpeg -hide_banner -i '$file' 2>&1";
-    $output = '';
+    $output = [];
     exec($command, $output, $returnVar);
     exec("mplayer -nolirc -vo null -ao null -frames 0 -identify '$file' 2>&1",$output, $returnVar);
     return $output;
@@ -71,7 +242,7 @@ function getVideoMeta($file, &$returnVar = 0) {
 function arrayFindStr($array, $needle) {
     if(is_array($needle)) {
         $return = [];
-        foreach($res as $line) {
+        foreach($array as $line) {
             foreach($needle as $v) {
                 if(strpos($line, $v) !== false) {
                     $return[$needle] = $line;
@@ -80,8 +251,8 @@ function arrayFindStr($array, $needle) {
         }
         return $return;
     } else {
-        foreach($res as $line) {
-            if(strpos($line, $v) !== false) {
+        foreach($array as $line) {
+            if(strpos($line, $needle) !== false) {
                 return $line;
             }
         }
@@ -167,7 +338,7 @@ function arrayFindFieldValue(array $array, $needle, array $addSep = [], string $
         }
         return empty($return) ? null : $return;
     } else {
-        foreach($res as $line) {
+        foreach($array as $line) {
             $val = getStrFieldValue($line, $sep, $needle);
             if($val !== null) {
                 return $val;
@@ -249,7 +420,14 @@ function videoTime($time) {
     }
 }
 
-function fetch($url, $opt = []) {
+/**
+ * 使用CURL获取内容，
+ *
+ * @param string $url
+ * @param array $opt
+ * @return Fetch
+ */
+function fetch(string $url, $opt = []) {
     return new Fetch($url, $opt);
 }
 
@@ -300,7 +478,7 @@ class Fetch{
             if(is_array(self::$CURLOPT_COOKIE)) {
                 $host = parse_url($url,  PHP_URL_HOST);
                 foreach(self::$CURLOPT_COOKIE as $cookeDomain => $cookie) {
-                    if(isUpDomain($cookeDomain, $host) >= 0) {
+                    if(isUpDomain($host, $cookeDomain) >= 0) {
                         $defOpt[CURLOPT_COOKIE] = $cookie;
                     }
                 }
@@ -328,7 +506,15 @@ class Fetch{
     }
 }
 
-function wget($url, $output, $opt = []) {
+/**
+ * 使用Wget命令下载文件
+ *
+ * @param string $url
+ * @param string $output 保存到文件
+ * @param array $opt    命令行选项
+ * @return void
+ */
+function wget(string $url, string $output, $opt = []) {
     $defOpt = [
         '-w' => 5,
         '-T' => 5,
@@ -363,6 +549,12 @@ function wget($url, $output, $opt = []) {
     return $returnVar;
 }
 
+/**
+ * 清理命令行
+ *
+ * @param int $selfWidth
+ * @return void
+ */
 function clearTTYLine($selfWidth = null) {
     static $ttywidth;
     if(!$ttywidth && !$selfWidth) {
