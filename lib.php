@@ -176,13 +176,21 @@ class SmartStrPos {
         return $pos;
     }
 
+    public function count($needle) {
+        $offsetContent = $this->content;
+        if($this->offset) {
+            $offsetContent = mb_substr($this->content, $this->offset);
+        }
+        return mb_substr_count($offsetContent, $needle);
+    }
+
     public function nextPair($startPairFlag, $startPair,$endPair) {
         return $this->nextPairMatch($startPairFlag, $startPair, null, $endPair, null);
     }
 
     public function nextPairMatch($startPairFlag, $startPair, ?array $startPairSuffix, $endPair, ?array $endPairSuffix) {
         $startPos = $this->next($startPairFlag);
-        $endPosOffset = $pairPosOffset = $startPos;
+        $endPosOffset = $pairPosOffset = $startPos + mb_strlen($startPairFlag);
         $pairLen = 0;
 
         $endPairLen = mb_strlen($endPair);
