@@ -78,6 +78,7 @@ class SmartStrPos {
         $this->contentLen = mb_strlen($content);
         $this->bakContent = $this->content;
         if(!$pre) {
+            $this->offset = $offset;
             $this->next($needle);
         }
     }
@@ -176,9 +177,9 @@ class SmartStrPos {
         return $pos;
     }
 
-    public function count($needle) {
+    public function count($needle, $start = false) {
         $offsetContent = $this->content;
-        if($this->offset) {
+        if($start && $this->offset) {
             $offsetContent = mb_substr($this->content, $this->offset);
         }
         return mb_substr_count($offsetContent, $needle);
@@ -188,12 +189,27 @@ class SmartStrPos {
         return $this->nextPairMatch($startPairFlag, $startPair, null, $endPair, null);
     }
 
-    public function nextPairMatch($startPairFlag, $startPair, ?array $startPairSuffix, $endPair, ?array $endPairSuffix) {
+    /**
+     * 移动偏移量
+     *
+     * @param string $startPairFlag
+     * @param string $startPair
+     * @param array|null $startPairSuffix
+     * @param string $endPair
+     * @param array|null $endPairSuffix
+     * @return SmartStrPos
+     */
+    public function nextPairMatch(string $startPairFlag, string $startPair, ?array $startPairSuffix, string $endPair, ?array $endPairSuffix) {
         $startPos = $this->next($startPairFlag);
-        $endPosOffset = $pairPosOffset = $startPos + mb_strlen($startPairFlag);
-        $pairLen = 0;
-
+        if($startPos === false) {
+            return false;
+        }
+        $needleLen = mb_strlen($startPairFlag);
+        $endPosOffset = $pairPosOffset = ($startPos + $needleLen);
+        
+        $pairLen = mb_strlen($endPair);
         $endPairLen = mb_strlen($endPair);
+
         do {
             if($endPairSuffix) {
                 $endPos = $this->match($endPair, $endPairSuffix, $endPosOffset, $endPairLen);
@@ -209,8 +225,8 @@ class SmartStrPos {
                 $pairPos = mb_strpos($this->content, $startPair, $pairPosOffset);
             }
 
-            if($pairPos > $endPos) {
-                $str = mb_substr($this->content, $startPos + mb_strlen($startPairFlag), $endPos);
+            if(!$pairPos || $pairPos > $endPos) {
+                $str = mb_substr($this->content, $startPos + $needleLen, $endPos - $startPos -$needleLen);
                 $this->offset = $startPos;
                 $this->trail = $endPos + mb_strlen($endPair);
                 return self::begin($str);
@@ -220,6 +236,9 @@ class SmartStrPos {
             }
             $endPosOffset = $endPos + $endPairLen;
             $pairPosOffset = $pairPos + $pairLen;
+            if($endPosOffset > $this->contentLen || $pairPosOffset > $this->contentLen) {
+                return false;
+            }
         } while(true);
     }
 
@@ -232,6 +251,13 @@ class SmartStrPos {
 
     public static function begin(string $content) {
         return new static($content, '', 0, true);
+    }
+    public function __get($name)
+    {
+        return $this->$name;
+    }
+    public function __toString() {
+        return $this->content;
     }
 }
 
@@ -550,8 +576,8 @@ function wget(string $url, string $output, $opt = []) {
     }
     $returnVar = 0;
     passthru("wget $option $url", $returnVar);
-    if(file_exists($output) && !filesize($output)) {
-        echo "wget Warning: $output file size is 0, Removed!" . PHP_EOL;
+    if(file_exists($output) && !filesize($output) && $returnVar) {
+        trigger_error("wget has error and file($output) size is 0, Removed!", E_USER_WARNING);
         unlink($output);
     }
     return $returnVar;
