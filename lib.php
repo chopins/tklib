@@ -70,6 +70,13 @@ function strFind(string $content, $start, $end, $offset, &$findPos = 0)
     return trim(mb_substr($content, $startPos + $startlen, $endPos - $startPos - $startlen));
 }
 
+/**
+ * @property-read int $offset
+ * @property-read int $trail
+ * @property-read string $content
+ * @property-read int $contentLen
+ * @property-read string $bakContent
+ */
 class SmartStrPos
 {
     private $offset = 0;
@@ -77,12 +84,12 @@ class SmartStrPos
     private $content = '';
     private $contentLen = 0;
     private $bakContent;
-    public function __construct(string $content, string $needle, int $offset = 0, bool $pre = false)
+    public function __construct(string $content, ?string $needle = null, int $offset = 0)
     {
         $this->content = $content;
         $this->contentLen = mb_strlen($content);
         $this->bakContent = $this->content;
-        if (!$pre) {
+        if (!empty($needle)) {
             $this->offset = $offset;
             $this->next($needle);
         }
@@ -113,30 +120,66 @@ class SmartStrPos
         $this->trail = $this->offset + mb_strlen($needle);
     }
     /**
-     * 从当前偏移量向后查找第一个出现的$needle
+     * 从当前偏移量回退查找第一个出现的$needle
      *
      * @param string $needle
-     * @param boolean $movie
+     * @param boolean $move
      * @return int
      */
-    public function back(string $needle, bool $movie = true)
+    public function back(string $needle, bool $move = true)
     {
         $coffset = mb_strrpos($this->content, $needle, $this->offset - $this->contentLen);
-        if ($coffset !== false && $movie) {
+        if ($coffset !== false && $move) {
             $this->offset  = $coffset;
             $this->trailPos($needle);
         }
         return $coffset;
     }
 
-    public function next(string $needle)
+    public function trailToOffset()
+    {
+        $this->trail = $this->offset;
+    }
+
+    public function next(string $needle, bool $move = true)
     {
         $coffset = mb_strpos($this->content, $needle, $this->trail);
-        if ($coffset !== false) {
+        if ($coffset !== false && $move) {
             $this->offset  = $coffset;
             $this->trailPos($needle);
         }
         return  $coffset;
+    }
+
+    public function afterNear(string $needle, $ignoreEmpty = false)
+    {
+        $current = $this->trait;
+        $cur = $this->next($needle, false);
+        if($cur === false) {
+            return false;
+        }
+        if($cur === $current) {
+            return true;
+        }
+        if($ignoreEmpty) {
+            return empty(trim(mb_substr($this->content, $current, $cur - $current)));
+        }
+        
+    }
+
+    public function beforeNear(string $needle, $ignoreEmpty = false)
+    {
+        $current = $this->offset;
+        $cur = $this->back($needle, false);
+        if($cur === false) {
+            return false;
+        }
+        if($this->trait === $current) {
+            return true;
+        }
+        if($ignoreEmpty) {
+            return empty(trim(mb_substr($this->content, $cur, $current - $cur)));
+        }
     }
 
     public function nextSub(string $start, string $end = null, $move = false)
@@ -250,6 +293,7 @@ class SmartStrPos
     public function nextPairMatch(string $startPairFlag, string $startPair, ?array $startPairSuffix, string $endPair, ?array $endPairSuffix)
     {
         $startPos = $this->next($startPairFlag);
+
         if ($startPos === false) {
             return false;
         }
@@ -302,7 +346,7 @@ class SmartStrPos
 
     public static function begin(string $content)
     {
-        return new static($content, '', 0, true);
+        return new static($content, null);
     }
     public function __get($name)
     {
@@ -312,6 +356,15 @@ class SmartStrPos
     {
         return $this->content;
     }
+
+    public function __set_state($properties)
+    {
+        $pos = new static($properties['content'], null, $properties['offset']);
+        foreach ($properties as $name => $v) {
+            $pos->$name = $v;
+        }
+        return $pos;
+    }
 }
 
 function smartStrPos(string $content, string $needle, int $offset = 0)
@@ -319,12 +372,14 @@ function smartStrPos(string $content, string $needle, int $offset = 0)
     return new SmartStrPos($content, $needle, $offset);
 }
 
-function ffmpegGetMediaMeta($file,$key, $flag)
+function ffmpegGetMediaMeta($file, $key, $flag)
 {
-    $flags = ['AV_DICT_MATCH_CASE' =>1, 'AV_DICT_IGNORE_SUFFIX' =>2, 
-    'AV_DICT_DONT_STRDUP_KEY'=>4,'AV_DICT_DONT_STRDUP_VAL'=>8, 
-    'AV_DICT_DONT_OVERWRITE'=>16,'AV_DICT_APPEND'=>32,'AV_DICT_MULTIKEY'=>64];
-    if(!isset($flags[$flag])) {
+    $flags = [
+        'AV_DICT_MATCH_CASE' => 1, 'AV_DICT_IGNORE_SUFFIX' => 2,
+        'AV_DICT_DONT_STRDUP_KEY' => 4, 'AV_DICT_DONT_STRDUP_VAL' => 8,
+        'AV_DICT_DONT_OVERWRITE' => 16, 'AV_DICT_APPEND' => 32, 'AV_DICT_MULTIKEY' => 64
+    ];
+    if (!isset($flags[$flag])) {
         trigger_error('av dict flags error', E_USER_NOTICE);
         return false;
     }
@@ -376,26 +431,26 @@ function ffmpegGetMediaMeta($file,$key, $flag)
     EOF;
 
     $ffi = FFI::cdef($cCode, '/usr/share/code/libffmpeg.so');
-    $fmtCtx = FFI::addr($ffi->new('AVFormatContext', false, true)); 
+    $fmtCtx = FFI::addr($ffi->new('AVFormatContext', false, true));
     $tag = FFI::addr($ffi->new('AVDictionaryEntry'));
 
     $ffi->avformat_open_input(FFI::addr($fmtCtx), $file, NULL, NULL);
     $ret = [];
-    if(empty($key)) {
-        $key  ='';
-        while(($tag = $ffi->av_dict_get($fmtCtx->metadata, $key, $tag, $flags[$flag]))) {
+    if (empty($key)) {
+        $key  = '';
+        while (($tag = $ffi->av_dict_get($fmtCtx->metadata, $key, $tag, $flags[$flag]))) {
             var_dump($tag);
-            $key  =FFI::string($tag->key);
+            $key  = FFI::string($tag->key);
             $tagValue = FFI::string($tag->value);
             $ret[$key] = $tagValue;
         }
     } else {
         $tag = $ffi->av_dict_get($fmtCtx->metadata, '', $tag, $flags[$flag]);
-        $key  =FFI::string($tag->key);
+        $key  = FFI::string($tag->key);
         $tagValue = FFI::string($tag->value);
         $ret[$key] = $tagValue;
     }
-    $ffi->avformat_close_input(FFI::addr($fmtCtx)); 
+    $ffi->avformat_close_input(FFI::addr($fmtCtx));
     return $ret;
 }
 
@@ -470,7 +525,14 @@ function getVideoMeta($file): array
     return $return;
 }
 
-function arrayFindStr($array, $needle)
+/**
+ * 在数组查找包含给定字符串的元素
+ *
+ * @param array $array
+ * @param string|array $needle
+ * @return mixed
+ */
+function arrayFindStr(array $array, $needle)
 {
     if (is_array($needle)) {
         $return = [];
@@ -483,9 +545,18 @@ function arrayFindStr($array, $needle)
         }
         return $return;
     } else {
-        foreach ($array as $line) {
-            if (strpos($line, $needle) !== false) {
-                return $line;
+        if (strpos($needle, "\f") === false) {
+            $tmpStr = join("\f", $array);
+            $pos = SmartStrPos::begin($tmpStr);
+            $offset = $pos->next($needle);
+            if ($offset) {
+                return $pos->backSub("\f", "\f");
+            }
+        } else {
+            foreach ($array as $line) {
+                if (strpos($line, $needle) !== false) {
+                    return $line;
+                }
             }
         }
     }
@@ -694,6 +765,12 @@ function isUpDomain($subDomain, $upDomain)
     return -1;
 }
 
+/**
+ * @property-read string $data
+ * @property-read int $retCode
+ * @property-read string $error
+ * @property-read int $errCode
+ */
 class Fetch
 {
     private $data = '';
@@ -751,6 +828,21 @@ class Fetch
         $this->errCode  = curl_errno($ch1);
         $this->error = curl_error($ch1);
         curl_close($ch1);
+    }
+
+    public function getError()
+    {
+        return $this->error;
+    }
+
+    public function errorCode()
+    {
+        return $this->errCode;
+    }
+
+    public function returnCode()
+    {
+        return $this->retCode;
     }
 
     public function __get($name)
@@ -884,26 +976,87 @@ function rloopArray(array &$array, callable $callback, $userdata = null)
 }
 /**
  * 树查找，返回找到的路径
- *
+ * A B C
+ * D B C
  * @param [array $array
  * @param mixed $value      可为函数或具体值
  * @return array
  */
 function findTree(array $array, $value)
 {
-    static $treePath = [];
+    $treePath = [];
     foreach ($array as $k => $v) {
         if ($v === $value || (is_callable($value) && $value($v, $k) === 0)) {
             $treePath[] = $k;
             return $treePath;
-        } elseif (is_array($array)) {
-            $treePath[] = $k;
+        } elseif (is_array($v)) {
             $subTree = findTree($v, $value);
-            if ($subTree !== $treePath) {
+            if (!empty($subTree)) {
+                array_unshift($subTree, $k);
                 return $subTree;
             }
         }
     }
-    array_pop($treePath);
     return $treePath;
+}
+
+function strEndPos($str, $needle)
+{
+    return mb_strrpos($str, $needle) == (mb_strlen($str) - mb_strlen($needle));
+}
+
+class Csv
+{
+    public static int $lineLength = 0;
+    public static string $delimiter = ',';
+    public static string $enclosure = '"';
+    public static string $escape = '\\';
+    private $fp = null;
+    public function __construct(string $file)
+    {
+        $this->fp = fopen($file, 'rb');
+    }
+    public function read()
+    {
+        if ($this->isEnd()) {
+            return false;
+        }
+        return fgetcsv($this->fp, self::$lineLength, self::$delimiter, self::$enclosure, self::$escape);
+    }
+    public function readAll()
+    {
+        $this->reset();
+        $ret = [];
+        while (false !== ($line = $this->read())) {
+            $ret[] = $line;
+        }
+        return $ret;
+    }
+
+    public function reset()
+    {
+        fseek($this->fp, 0, SEEK_SET);
+    }
+
+    public function xRead()
+    {
+        while (false !== ($line = $this->read())) {
+            yield $line;
+        }
+    }
+
+    public function isEnd()
+    {
+        return feof($this->fp);
+    }
+
+    public function close()
+    {
+        fclose($this->fp);
+    }
+
+    public function __destruct()
+    {
+        $this->close();
+    }
 }
