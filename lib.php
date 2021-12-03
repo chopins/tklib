@@ -43,7 +43,8 @@ function sortBySubVal(array &$arr, $subKey, $sortFlag = SORT_REGULAR, $reverse =
  * @param string $content   在其中查找
  * @param array $start      开始字符串及其长度，值类似 array($开始字符串,$长度);
  * @param string $end       结束字符串
- * @param int $offset       偏移量，如果是负数，将以开始字符串$start最后出现的位置为起点
+ * @param int $offset       指定查找偏移量，如果是负数，将以开始字符串$start最后出现的位置为起点
+ * @param int $findPos      查找到的偏移量
  * @return string|bool      返回false即未找到
  */
 function strFind(string $content, $start, $end, $offset, &$findPos = 0)
@@ -194,7 +195,7 @@ class SmartStrPos
     }
 
     /**
-     * 查找下一个指定字符串，
+     * 从上一次的尾偏移量开始，查找下一个指定字符串
      * 注：偏移量位于查找字符串开头
      *
      * @param string $needle    需要查找的字符串
@@ -242,8 +243,8 @@ class SmartStrPos
      */
     public function afterNearMatch(array $needle, $ignoreEmpty = false)
     {
-        foreach($needle as $n) {
-            if($this->afterNear($n, $ignoreEmpty)) {
+        foreach ($needle as $n) {
+            if ($this->afterNear($n, $ignoreEmpty)) {
                 return true;
             }
         }
@@ -252,8 +253,8 @@ class SmartStrPos
 
     public function beforeNearMatch(array $needle, $ignoreEmpty = false)
     {
-        foreach($needle as $n) {
-            if($this->beforeNear($n, $ignoreEmpty)) {
+        foreach ($needle as $n) {
+            if ($this->beforeNear($n, $ignoreEmpty)) {
                 return true;
             }
         }
@@ -283,11 +284,11 @@ class SmartStrPos
     }
 
     /**
-     * 获取下一个子字符串，不包括起始与结束字符串
+     * 从上一次的尾偏移量开始，获取下一个子字符串，查找范围不包括起始与结束字符串，
      *
      * @param string $start         起始字符串
      * @param string|null $end      结束字符串
-     * @param boolean $move         是否移动偏移量
+     * @param boolean $move         是否移动偏移量，偏移量位于开始字符串首
      * @return string
      */
     public function nextSub(string $start, string $end = null, $move = false)
@@ -388,7 +389,7 @@ class SmartStrPos
     {
         $pos = false;
         $prepos = mb_strpos($this->content, $str, $offset);
-        if($prepos === false) {
+        if ($prepos === false) {
             return $pos;
         }
         foreach ($suffixArr as $suffix) {
@@ -709,27 +710,39 @@ function arrayFind(array $array, $needle, $equal = true)
     return false;
 }
 
+/**
+ * 获取字符串
+ *
+ * @param string $str
+ * @param array $seplist
+ * @param string $field
+ * @return void
+ */
 function getStrFieldValue(string $str, array $seplist = ['=', ':'], string &$field = '')
 {
     $line = trim($str);
-    if (!$field) {
-        foreach ($seplist as $sep) {
-            if (strpos($line, $sep) > 0) {
-                list($field, $val) = explode($sep, $line, 2);
-                return trim($val);
-            }
+    $line = str_replace($seplist, '=', $line);
+    parse_str($line, $result);
+    if ($field) {
+        if (isset($result[$field])) {
+            return trim($result[$field]);
         }
-    } elseif (strpos($str, $field) >= 0) {
-        foreach ($seplist as $sep) {
-            if (strpos($line, $sep) > 0) {
-                list($fieldNew, $val) = explode($sep, $line, 2);
-                if (trim($fieldNew) == $field) {
-                    return trim($val);
-                }
-            }
+        return  null;
+    } else {
+        $field = trim(key($result));
+        return trim(current($result));
+    }
+}
+
+function isPrefix($str, $prefix)
+{
+    $prefix = is_scalar($prefix) ? [$prefix] : $prefix;
+    foreach ($prefix as $p) {
+        if (strpos($str, $p) === 0) {
+            return true;
         }
     }
-    return null;
+    return false;
 }
 
 function hasStr($str, $list = [])
