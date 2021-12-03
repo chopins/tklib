@@ -1,5 +1,7 @@
 <?php
 
+define('FILE_NEW_APPEND', max(FILE_APPEND, FILE_USE_INCLUDE_PATH, LOCK_EX) * 2);
+
 /**
  * 根据二维数组的子数组的键值排序
  *
@@ -1086,9 +1088,24 @@ function strCountNumerOfLetter($str, $isnum)
     return $count;
 }
 
-function saveArray($file, $array)
+/**
+ * 保存数组
+ *
+ * @param string $file
+ * @param array $array
+ * @param integer $option    参数值与 file_put_contents 的 flags 一样，另增加 FILE_NEW_APPEND 用于附加保存时重置
+ * @return string
+ */
+function saveArray($file, $array, $option = 0)
 {
-    file_put_contents($file, '<?php return ' . var_export($array, true) . ';');
+    if ($option & FILE_APPEND) {
+        $var = '$_ARRAY';
+        if (!file_exists($file) || $option & FILE_NEW_APPEND) {
+            $var = "<?php $var = [];" . PHP_EOL . $var;
+        }
+        file_put_contents($file, "{$var}[] = " . var_export($array, true) . ';' . PHP_EOL, $option);
+    }
+    file_put_contents($file, '<?php return ' . var_export($array, true) . ';', $option);
 }
 
 function pathJoin(...$args)
