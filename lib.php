@@ -38,7 +38,7 @@ function sortBySubVal(array &$arr, $subKey, $sortFlag = SORT_REGULAR, $reverse =
 }
 
 /**
- * 查找字符串,返回开始字符串与结束字符串之间的字符串
+ * 查找字符串,返回开始字符串与结束字符串之间的字符串，不包括起始与结束字符串
  *
  * @param string $content   在其中查找
  * @param array $start      开始字符串及其长度，值类似 array($开始字符串,$长度);
@@ -84,16 +84,26 @@ class SmartStrPos
     private $content = '';
     private $contentLen = 0;
     private $bakContent;
-    public function __construct(string $content, ?string $needle = null, int $offset = 0)
+
+    /**
+     * 初始化字符串查找类
+     *
+     * @param string $content   内容
+     * @param integer $offset   开始查找时的起始偏移量
+     */
+    public function __construct(string $content, int $offset = 0)
     {
         $this->content = $content;
         $this->contentLen = mb_strlen($content);
         $this->bakContent = $this->content;
-        if (!empty($needle)) {
-            $this->offset = $offset;
-            $this->next($needle);
-        }
+        $this->offset = $offset;
     }
+
+    /**
+     * 重置当前偏移量和尾偏移记录，还原内容
+     *
+     * @return void
+     */
     public function reset()
     {
         $this->offset = 0;
@@ -101,6 +111,15 @@ class SmartStrPos
         $this->content = $this->bakContent;
     }
 
+    /**
+     * 限制到指定长度内容
+     *
+     * @param int|string $needle    设置内容长度上限，
+     *                              0时为全部；
+     *                              仅整数类型时将截取从0到指定值长度内容；
+     *                              字符串时（包括字符串数字）将查找到该字符串位置，偏移量将不包括该字符串
+     * @return void
+     */
     public function limit($needle)
     {
         if ($needle === 0) {
@@ -113,6 +132,34 @@ class SmartStrPos
         $limit = mb_strpos($this->content, $needle);
         $this->content = mb_substr($this->content, 0, $limit);
         return $limit;
+    }
+
+    public function __call(string $name, $arguments = [])
+    {
+        return $this->iterator($name, $arguments);
+    }
+
+    protected function iterator(string $name, $args)
+    {
+        $class = self::class;
+        if ($name[0] != 'g') {
+            throw new Error("Call to undefined method $class::$name()", E_USER_ERROR);
+        }
+        $method = lcfirst(substr($name, 1));
+        $funcList = [
+            'back', 'next', 'nextSub', 'backRange', 'backSub', 'nextPair',
+            'nextPairMatch', 'nextRange', ''
+        ];
+        if (!in_array($method, $funcList)) {
+            throw new Error("Call to undefined method $class::$name()", E_USER_ERROR);
+        }
+        do {
+            $ret = call_user_func_array([$this, $method], $args);
+            if ($ret === false) {
+                return $ret;
+            }
+            yield $ret;
+        } while (true);
     }
 
     private function trailPos(string $needle)
@@ -136,11 +183,24 @@ class SmartStrPos
         return $coffset;
     }
 
+    /**
+     * 设置尾偏移量为起始量，尾偏移量位于查看字符串末尾
+     *
+     * @return void
+     */
     public function trailToOffset()
     {
         $this->trail = $this->offset;
     }
 
+    /**
+     * 查找下一个指定字符串，
+     * 注：偏移量位于查找字符串开头
+     *
+     * @param string $needle    需要查找的字符串
+     * @param boolean $move     是否移动偏移量，默认移动
+     * @return int              返回偏移量
+     */
     public function next(string $needle, bool $move = true)
     {
         $coffset = mb_strpos($this->content, $needle, $this->trail);
@@ -151,37 +211,85 @@ class SmartStrPos
         return  $coffset;
     }
 
+    /**
+     * 判断当前偏移前方（文件末尾方向）是否紧随给定字符串
+     *
+     * @param string $needle
+     * @param boolean $ignoreEmpty  忽略空白字符，空白字符为 trim() 函数默认的去除的字符
+     * @return bool
+     */
     public function afterNear(string $needle, $ignoreEmpty = false)
     {
-        $current = $this->trait;
+        $current = $this->trail;
         $cur = $this->next($needle, false);
-        if($cur === false) {
+        if ($cur === false) {
             return false;
         }
-        if($cur === $current) {
+        if ($cur === $current) {
             return true;
         }
-        if($ignoreEmpty) {
-            return empty(trim(mb_substr($this->content, $current, $cur - $current)));
+        if ($ignoreEmpty) {
+            return empty(ltrim(mb_substr($this->content, $current, $cur - $current)));
         }
-        
     }
 
+    /**
+     * 检测多个字符串
+     *
+     * @param array $needle
+     * @param boolean $ignoreEmpty
+     * @return bool
+     */
+    public function afterNearMatch(array $needle, $ignoreEmpty = false)
+    {
+        foreach($needle as $n) {
+            if($this->afterNear($n, $ignoreEmpty)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public function beforeNearMatch(array $needle, $ignoreEmpty = false)
+    {
+        foreach($needle as $n) {
+            if($this->beforeNear($n, $ignoreEmpty)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 判断当前偏移后方（文件头方向）是否紧随给定字符串
+     *
+     * @param string $needle
+     * @param boolean $ignoreEmpty  忽略空白字符，空白字符为 ltrim() 函数默认的去除的字符
+     * @return bool
+     */
     public function beforeNear(string $needle, $ignoreEmpty = false)
     {
         $current = $this->offset;
         $cur = $this->back($needle, false);
-        if($cur === false) {
+        if ($cur === false) {
             return false;
         }
-        if($this->trait === $current) {
+        if ($this->trail === $current) {
             return true;
         }
-        if($ignoreEmpty) {
-            return empty(trim(mb_substr($this->content, $cur, $current - $cur)));
+        if ($ignoreEmpty) {
+            return empty(ltrim(mb_substr($this->content, $cur, $current - $cur)));
         }
     }
 
+    /**
+     * 获取下一个子字符串，不包括起始与结束字符串
+     *
+     * @param string $start         起始字符串
+     * @param string|null $end      结束字符串
+     * @param boolean $move         是否移动偏移量
+     * @return string
+     */
     public function nextSub(string $start, string $end = null, $move = false)
     {
         $findPos = 0;
@@ -220,6 +328,13 @@ class SmartStrPos
         return $str;
     }
 
+    /**
+     * 获取子字符串
+     *
+     * @param int $start
+     * @param int $length
+     * @return string
+     */
     public function sub($start, $length = null)
     {
         if ($length === null) {
@@ -229,11 +344,11 @@ class SmartStrPos
     }
 
     /**
-     * 会移动偏移量
-     *
-     * @param string $start
-     * @param string $end
-     * @return SmartStrPos
+     * 在偏移量后，获取子字符串的SmartStrPos实例
+     *  注：不包括起始与结束字符串
+     * @param string $start     起始字符串
+     * @param string $end       结束字符串
+     * @return SmartStrPos|bool
      */
     public function nextRange(string $start, string $end)
     {
@@ -244,6 +359,13 @@ class SmartStrPos
         return false;
     }
 
+    /**
+     * 在偏移量前，获取子字符串SmartStrPos实例
+     *
+     * @param string $start
+     * @param string $end
+     * @return SmartStrPos|bool
+     */
     public function backRange(string $start, string $end)
     {
         $str = $this->backSub($start, $end, true);
@@ -253,19 +375,39 @@ class SmartStrPos
         return false;
     }
 
+    /**
+     * 多规则字符串查找
+     *
+     * @param string $str           查找字符开头部分
+     * @param array $suffixArr      查找字符串尾列表
+     * @param int $offset           查找偏移
+     * @param int $len              匹配字符串长度
+     * @return int
+     */
     protected function match($str, $suffixArr, $offset, &$len)
     {
         $pos = false;
+        $prepos = mb_strpos($this->content, $str, $offset);
+        if($prepos === false) {
+            return $pos;
+        }
         foreach ($suffixArr as $suffix) {
             $len = mb_strlen($str . $suffix);
             $pos = mb_strpos($this->content, $str . $suffix, $offset);
-            if ($pos) {
+            if ($pos !== false) {
                 break;
             }
         }
         return $pos;
     }
 
+    /**
+     * 子字符串长度
+     *
+     * @param string $needle
+     * @param boolean $start
+     * @return void
+     */
     public function count($needle, $start = false)
     {
         $offsetContent = $this->content;
@@ -275,19 +417,32 @@ class SmartStrPos
         return mb_substr_count($offsetContent, $needle);
     }
 
+    /**
+     * 在指定字符串后获取子字符串
+     *
+     * @param string $startPairFlag
+     * @param string $startPair
+     * @param string $endPair
+     * @return SmartStrPos
+     */
     public function nextPair($startPairFlag, $startPair, $endPair)
     {
         return $this->nextPairMatch($startPairFlag, $startPair, null, $endPair, null);
     }
 
     /**
-     * 移动偏移量
+     * 在指定字符串后获取子字符串，多规则查找
+     * 
+     * <code>
+     * $str = new SmartStrPos('123abcd45-123efg45=123higk45');
+     * $str->nextPairMatch('=','123',null, '45', null); // higk
+     * </code>
      *
-     * @param string $startPairFlag
-     * @param string $startPair
-     * @param array|null $startPairSuffix
-     * @param string $endPair
-     * @param array|null $endPairSuffix
+     * @param string $startPairFlag             该字符串后查找
+     * @param string $startPair                 截取起始字符串前缀
+     * @param array|null $startPairSuffix       截取起始字符串后缀列表
+     * @param string $endPair                   截取结束字符串前缀
+     * @param array|null $endPairSuffix         截取结束字符串后缀列表
      * @return SmartStrPos
      */
     public function nextPairMatch(string $startPairFlag, string $startPair, ?array $startPairSuffix, string $endPair, ?array $endPairSuffix)
@@ -346,7 +501,7 @@ class SmartStrPos
 
     public static function begin(string $content)
     {
-        return new static($content, null);
+        return new static($content);
     }
     public function __get($name)
     {
@@ -359,7 +514,7 @@ class SmartStrPos
 
     public function __set_state($properties)
     {
-        $pos = new static($properties['content'], null, $properties['offset']);
+        $pos = new static($properties['content'], $properties['offset']);
         foreach ($properties as $name => $v) {
             $pos->$name = $v;
         }
@@ -367,9 +522,9 @@ class SmartStrPos
     }
 }
 
-function smartStrPos(string $content, string $needle, int $offset = 0)
+function smartStrPos(string $content, int $offset = 0)
 {
-    return new SmartStrPos($content, $needle, $offset);
+    return new SmartStrPos($content, $offset);
 }
 
 function ffmpegGetMediaMeta($file, $key, $flag)
@@ -530,33 +685,24 @@ function getVideoMeta($file): array
  *
  * @param array $array
  * @param string|array $needle
+ * @param bool $equal    是否判断完全等于，否则只检测是否包含
  * @return mixed
  */
-function arrayFindStr(array $array, $needle)
+function arrayFind(array $array, $needle, $equal = true)
 {
     if (is_array($needle)) {
         $return = [];
-        foreach ($array as $line) {
-            foreach ($needle as $v) {
-                if (strpos($line, $v) !== false) {
-                    $return[$needle] = $line;
-                }
-            }
+        foreach ($needle as $v) {
+            $return[$v] = arrayFind($array, $v, $equal);
         }
         return $return;
     } else {
-        if (strpos($needle, "\f") === false) {
-            $tmpStr = join("\f", $array);
-            $pos = SmartStrPos::begin($tmpStr);
-            $offset = $pos->next($needle);
-            if ($offset) {
-                return $pos->backSub("\f", "\f");
-            }
-        } else {
-            foreach ($array as $line) {
-                if (strpos($line, $needle) !== false) {
-                    return $line;
-                }
+        if ($equal) {
+            return array_search($needle, $array);
+        }
+        foreach ($array as $idx => $line) {
+            if (strpos($line, $needle) !== false) {
+                return $idx;
             }
         }
     }
@@ -773,17 +919,17 @@ function isUpDomain($subDomain, $upDomain)
  */
 class Fetch
 {
-    private $data = '';
+    private string $data = '';
     private $retCode = 0;
-    private $error = '';
-    private $errCode = 0;
-    public static $CURLOPT_USERAGENT = null;
-    public static $CURLOPT_COOKIE = NULL;
-    public static $CURLOPT_CONNECTTIMEOUT = 10;
-    public static $CURLOPT_FOLLOWLOCATION = 1;
-    public static $CURLOPT_MAXREDIRS = 10;
-    public static $autoLastReferer = false;
-    public static $lastUrl = '';
+    private string $error = '';
+    private int $errCode = 0;
+    public static ?string $CURLOPT_USERAGENT = null;
+    public static ?string $CURLOPT_COOKIE = NULL;
+    public static int $CURLOPT_CONNECTTIMEOUT = 10;
+    public static bool $CURLOPT_FOLLOWLOCATION = true;
+    public static int $CURLOPT_MAXREDIRS = 10;
+    public static bool $autoLastReferer = false;
+    public static string $lastUrl = '';
     public function __construct($url, $opt = [])
     {
         $ch1 = curl_init();
