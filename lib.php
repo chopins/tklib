@@ -456,7 +456,7 @@ class SmartStrPos
             return false;
         }
         $needleLen = mb_strlen($startPairFlag);
-        $endPosOffset = $pairPosOffset = ($startPos + $needleLen);
+        $endPosOffset = $pairPosOffset = $this->trail;
 
         $pairLen = mb_strlen($endPair);
         $endPairLen = mb_strlen($endPair);
@@ -467,6 +467,7 @@ class SmartStrPos
             } else {
                 $endPos = mb_strpos($this->content, $endPair, $endPosOffset);
             }
+
             if (!$endPos) {
                 return false;
             }
@@ -476,14 +477,13 @@ class SmartStrPos
                 $pairPos = mb_strpos($this->content, $startPair, $pairPosOffset);
             }
 
-            if (!$pairPos || $pairPos > $endPos) {
+            if ($pairPos && $pairPos < $endPos) {
                 $str = mb_substr($this->content, $startPos + $needleLen, $endPos - $startPos - $needleLen);
                 $this->offset = $startPos;
                 $this->trail = $endPos + mb_strlen($endPair);
                 return self::begin($str);
             } elseif ($pairPos === $endPos) {
-                trigger_error('start and end pair name is ambiguous', E_USER_WARNING);
-                return false;
+                throw new RangeException('start and end pair name is ambiguous');
             }
             $endPosOffset = $endPos + $endPairLen;
             $pairPosOffset = $pairPos + $pairLen;
@@ -1103,7 +1103,7 @@ function saveArray($file, $array, $option = 0)
         if (!file_exists($file) || $option & FILE_NEW_APPEND) {
             $var = "<?php $var = [];" . PHP_EOL . $var;
         }
-        file_put_contents($file, "{$var}[] = " . var_export($array, true) . ';' . PHP_EOL, $option);
+        return file_put_contents($file, "{$var}[] = " . var_export($array, true) . ';' . PHP_EOL, $option);
     }
     file_put_contents($file, '<?php return ' . var_export($array, true) . ';', $option);
 }
