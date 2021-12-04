@@ -652,6 +652,7 @@ class Process
             $read  = $this->mainSockPool[$mainId];
             $num   = stream_select($read, $write, $except, 10000);
             if (!$num) {
+                usleep(30000);
                 continue;
             }
             foreach ($read as $rs) {
