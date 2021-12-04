@@ -158,6 +158,7 @@ class Process
             $this->send($add, self::QUEUE_ADD . $message);
             $res = $this->read($add);
             $this->send($acp, $res);
+            usleep(30000);
         }
         exit;
     }
@@ -217,6 +218,7 @@ class Process
             if ($change > 0) {
                 $this->execTask($w, $taskCall);
             }
+            usleep(30000);
         }
         exit;
     }
@@ -287,6 +289,7 @@ class Process
             if ($change > 0) {
                 $this->queueRequest($r, $taskQueue);
             }
+            usleep(30000);
         }
         exit;
     }
@@ -338,6 +341,7 @@ class Process
                 $queue->enqueue($task);
             }
             $cnt--;
+            usleep(30000);
         } while ($cnt > 0);
     }
 
@@ -446,6 +450,7 @@ class Process
             foreach ($read as $rs) {
                 $this->readAccept($rs, $lockpid);
             }
+            usleep(10000);
         }
     }
 
@@ -661,6 +666,7 @@ class Process
                     return 0;
                 }
             }
+            usleep(30000);
         }
     }
 
@@ -806,6 +812,7 @@ class Process
                 }
                 usleep(50000);
             } while (true);
+            usleep(10000);
         } while (true);
         return 1;
     }
@@ -851,6 +858,7 @@ class Process
                 $this->wait($pid, $status, 1);
                 unset($pool[$pid]);
             }
+            usleep(30000);
         } while ($loop && count($pool));
     }
 
