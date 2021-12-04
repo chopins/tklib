@@ -27,19 +27,32 @@ class CommandInput
     const OPT_OPTIONAL    = -1;
     public function __construct(array $argv = [], int $argc = 0)
     {
-        if ($argv) {
-            $this->argv = $argv;
-            $this->argc = $argc ? $argc : count($argc);
-        } else {
+        do {
+            if ($argv) {
+                $this->argv = $argv;
+                $this->argc = $argc ? $argc : count($argc);
+                break;
+            }
             $argc = filter_input(INPUT_SERVER, 'argc');
             $argv = filter_input(INPUT_SERVER, 'argv');
             if ($argv) {
                 $this->argv = $argv;
-                $this->argc = $argc ? $argc : count($argc);
+                $this->argc = $argc ? $argc : count($argv);
+                break;
             }
-        }
+            if(!empty($_GET)) {
+                $this->argv = $_GET;
+                $this->argc = count($this->argv);
+            }
+        } while(0);
+
         $this->cmdInfo();
         $this->parseArg();
+    }
+
+    public static function instance()
+    {
+        return new static();
     }
 
     /**
