@@ -945,9 +945,21 @@ class Fetch
     public static int $CURLOPT_MAXREDIRS = 10;
     public static bool $autoLastReferer = false;
     public static string $lastUrl = '';
+    public static bool $CURLOPT_DNS_USE_GLOBAL_CACHE = true;
+
+    /**
+     * 是否复用连接
+     *
+     * @var boolean
+     */
+    public static bool $CURL_CONNET_REUSE = true;
+    public static $ch1 = null;
     public function __construct($url, $opt = [])
     {
-        $ch1 = curl_init();
+        if(!self::$ch1 || !self::$CURL_CONNET_REUSE) {
+            self::$ch1 = curl_init();
+        }
+
         $defOpt  = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => self::$CURLOPT_CONNECTTIMEOUT,
@@ -955,6 +967,7 @@ class Fetch
             CURLOPT_AUTOREFERER => true,
             CURLOPT_FOLLOWLOCATION => self::$CURLOPT_FOLLOWLOCATION,
             CURLOPT_MAXREDIRS =>  self::$CURLOPT_MAXREDIRS,
+            CURLOPT_DNS_USE_GLOBAL_CACHE => self::$CURLOPT_DNS_USE_GLOBAL_CACHE,
         ];
         if (self::$autoLastReferer) {
             $defOpt[CURLOPT_REFERER] = self::$lastUrl;
@@ -983,12 +996,14 @@ class Fetch
         foreach ($opt as $key => $val) {
             $defOpt[$key] = $val;
         }
-        curl_setopt_array($ch1, $defOpt);
-        $this->data = curl_exec($ch1);
-        $this->retCode = curl_getinfo($ch1,  CURLINFO_HTTP_CODE);
-        $this->errCode  = curl_errno($ch1);
-        $this->error = curl_error($ch1);
-        curl_close($ch1);
+        curl_setopt_array(self::$ch1, $defOpt);
+        $this->data = curl_exec(self::$ch1);
+        $this->retCode = curl_getinfo(self::$ch1,  CURLINFO_HTTP_CODE);
+        $this->errCode  = curl_errno(self::$ch1);
+        $this->error = curl_error(self::$ch1);
+        if(!self::$CURL_CONNET_REUSE) {
+            curl_close(self::$ch1);
+        }
     }
 
     public function getError()
