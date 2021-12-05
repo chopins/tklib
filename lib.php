@@ -1240,17 +1240,19 @@ class Csv
 /**
  * 命令行下的多任务进度
  *
- * @param int $cur          已处理数据量
- * @param int $total        总数据量
+ * @param int $cur           当前任务已处理数据量
+ * @param int $total         当前任务总数据量
  * @param int $totalTaskNum  总任务数    
  * @param int $taskIdx       当前任务索引数
  * @return void
  */
 function multitaskProgress($cur, $total, $totalTaskNum, $taskIdx)
 {
-
+    $tabSize = 8;
+    list(, $ttywidth) = getTTYSize();
+    $tabNum  = floor($ttywidth/$totalTaskNum/$tabSize);
     $fn = $cur/$total * 100;
-    $p = 100 / $totalTaskNum;
+    $p = 100 / ($tabSize * $tabNum);
     $maskNum = floor($fn/$p);
     $mask = str_repeat('=', $maskNum);
     $mod = $fn % $p;
@@ -1260,5 +1262,5 @@ function multitaskProgress($cur, $total, $totalTaskNum, $taskIdx)
     if($maskNum < ($totalTaskNum-1)) {
         $mask .=  ($cur % 2 == 0 ? '\\': '/');
     }
-    echo str_repeat("\t", $taskIdx) . $mask ."\r";
+    echo str_repeat("\t", $taskIdx * $tabNum) . $mask ."\r";
 }
