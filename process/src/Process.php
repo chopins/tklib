@@ -59,7 +59,7 @@ class Process
 
     public function setProcessTitle($title)
     {
-        if (PHP_MIN_VERSION < 5) {
+        if (PHP_MAJOR_VERSION < 5) {
             throw new \RuntimeException('setProcessTitle() is avaiabled when only php version greater then 5.5');
         }
         return cli_set_process_title($title);
@@ -226,7 +226,7 @@ class Process
     /**
      * exec task
      *
-     * @param resource $w
+     * @param array $w
      * @param callable $taskCall
      * @return int
      */
@@ -909,13 +909,13 @@ class Process
      * add a schedule task
      *
      * @param callable $task    task function
-     * @param mix $interval     task run interval , the value is number, the iterval is $iterval millisecond,
+     * @param mixed $interval     task run interval , the value is number, the iterval is $iterval millisecond,
      *                           if the value is string and suffix s,m,h,d,w, iterval is one times run after $interval
      *                           seconds, minutes, hours, days, weeks. other value will convert to current time of every day
      *                           this time is the task whill run
      * @param int $times        the task run times
-     * @param mix $start        the task first run time
-     * @param mix $end          the task last run time
+     * @param mixed $start        the task first run time
+     * @param mixed $end          the task last run time
      */
     public function addScheduleTask($task, $interval, $times = null, $start = null, $end = null)
     {

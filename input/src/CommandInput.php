@@ -30,7 +30,7 @@ class CommandInput
         do {
             if ($argv) {
                 $this->argv = $argv;
-                $this->argc = $argc ? $argc : count($argc);
+                $this->argc = $argc ? $argc : count($argv);
                 break;
             }
             $argc = filter_input(INPUT_SERVER, 'argc');
@@ -40,14 +40,24 @@ class CommandInput
                 $this->argc = $argc ? $argc : count($argv);
                 break;
             }
-            if(!empty($_GET)) {
+            if (!empty($_GET)) {
                 $this->argv = $_GET;
                 $this->argc = count($this->argv);
             }
-        } while(0);
+        } while (0);
 
         $this->cmdInfo();
         $this->parseArg();
+    }
+
+    public function getArg()
+    {
+        return $this->argv;
+    }
+
+    public function getArgc()
+    {
+        return $this->argc;
     }
 
     public static function instance()
@@ -68,7 +78,7 @@ class CommandInput
 
     public static function rawOnYes($raw)
     {
-        if(self::$shortBool && strtolower($raw) == 'y') {
+        if (self::$shortBool && strtolower($raw) == 'y') {
             return;
         }
         return filter_var($raw, FILTER_VALIDATE_BOOLEAN);
@@ -76,7 +86,7 @@ class CommandInput
 
     public static function rawOnOff($raw)
     {
-        if(self::$shortBool && strtolower($raw) == 'n') {
+        if (self::$shortBool && strtolower($raw) == 'n') {
             return;
         }
         $f = filter_var($raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -145,7 +155,7 @@ class CommandInput
     protected function cmdInfo()
     {
         if (isset($this->argv[0])) {
-            $this->enterFile = realpath($argv[0]);
+            $this->enterFile = realpath($this->argv[0]);
         }
         $this->cwd       = getcwd();
         $this->startTime = $_SERVER['REQUEST_TIME'];
@@ -153,7 +163,7 @@ class CommandInput
 
     public function getCwd(): string
     {
-        return $this->cwd();
+        return $this->cwd;
     }
 
     public function getStartTime(): int
@@ -181,8 +191,8 @@ class CommandInput
     {
         $res = [];
         foreach ($options as $opt) {
-            $type = substr_count($op, self::OPT_START_CHAR, 0, 2);
-            $op   = substr_count($op, ':', -2, 2);
+            $type = substr_count($opt, self::OPT_START_CHAR, 0, 2);
+            $opt   = substr_count($opt, ':', -2, 2);
             $key  = rtrim($opt, ':');
             if ($type === 0 && isset($this->options[$key])) {
                 $res[$key] = $this->options[$key];
@@ -217,7 +227,7 @@ class CommandInput
             return $this->options;
         }
 
-        return isset($this->options[$key]) ? $this->options($key) : false;
+        return isset($this->options[$key]) ? $this->options[$key] : false;
     }
 
     public function required(string $key)

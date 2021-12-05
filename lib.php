@@ -515,7 +515,7 @@ class SmartStrPos
         return $this->content;
     }
 
-    public function __set_state($properties)
+    public static function __set_state($properties)
     {
         $pos = new static($properties['content'], $properties['offset']);
         foreach ($properties as $name => $v) {
