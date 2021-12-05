@@ -1236,3 +1236,29 @@ class Csv
         $this->close();
     }
 }
+
+/**
+ * 命令行下的多任务进度
+ *
+ * @param int $cur          已处理数据量
+ * @param int $total        总数据量
+ * @param int $totalTaskNum  总任务数    
+ * @param int $taskIdx       当前任务索引数
+ * @return void
+ */
+function multitaskProgress($cur, $total, $totalTaskNum, $taskIdx)
+{
+
+    $fn = $cur/$total * 100;
+    $p = 100 / $totalTaskNum;
+    $maskNum = floor($fn/$p);
+    $mask = str_repeat('=', $maskNum);
+    $mod = $fn % $p;
+    if($mod >= $p/2 && $mod < $p) {
+        $mask .= '-';
+    }
+    if($maskNum < ($totalTaskNum-1)) {
+        $mask .=  ($cur % 2 == 0 ? '\\': '/');
+    }
+    echo str_repeat("\t", $taskIdx) . $mask ."\r";
+}
