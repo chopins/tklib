@@ -1,6 +1,6 @@
 <?php
 use Toknot\Database\DB;
-include_once __DIR__.'/autoload.php';
+include_once __DIR__.'/../autoload.php';
 DB::$forceFlushDatabaseCache = true;
 $dns = 'mysql:unix_socket=/var/lib/mysql/mysql.sock;dbname=test;charset=utf8';
 $dns = 'mysql:host=127.0.0.1;port=3306;dbname=test;charset=utf8';

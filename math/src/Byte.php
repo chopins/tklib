@@ -109,7 +109,7 @@ class Byte
     public static function toByte($string, $base = 2)
     {
         self::checkBase($base);
-        if (!preg_match_all('/([\d]+)(\s*)([PTGMK])(iB|B|)\s*/', $string, $matches)) {
+        if (!preg_match_all('/([\d]+)(\s*)([PTGMK]{0,1})(iB|B|)\s*/', $string, $matches)) {
             return 0;
         }
         $number = $matches[1];

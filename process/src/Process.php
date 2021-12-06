@@ -57,9 +57,6 @@ class Process
             throw new \RuntimeException('sysvshm extension un-loaded');
         }
         $this->argv = CommandInput::instance();
-        if($shmIpc) {
-            $this->shm[$channelName] = new ShareMemory('P');
-        }
     }
 
     public static function loadProcessExtension($shmIpc = false)
@@ -92,8 +89,8 @@ class Process
 
     public function setBlocking($pipe, $enable)
     {
-        if($this->shmIpc) {
-            $this->shm->setBlocking($pipe, true);
+        if($this->shmIpc && is_array($pipe)) {
+            $this->shm[$pipe[0]]->setBlocking($pipe[1], true);
         } else {
             stream_set_blocking($pipe, $enable);
         }
@@ -106,22 +103,24 @@ class Process
         $pid = $this->getpid();
         $this->send($pipe, self::CMD_QUIT . "|$pid");
         $res = $this->read($pipe);
-        fclose($pipe);
+        if(is_resource($pipe)) {
+            fclose($pipe);
+        }
         return $res;
     }
 
     public function send($sock, $data)
     {
-        if($this->shmIpc && !is_resource($sock)) {
-            return $this->shm->put($sock, $data);
+        if($this->shmIpc && is_array($sock)) {
+            return $this->shm[$sock[0]]->put($sock[1], $data);
         }
         return fwrite($sock, $data . PHP_EOL);
     }
 
     public function read($sock)
     {
-        if($this->shmIpc && !is_resource($sock)) {
-            return trim($this->shm->get($sock));
+        if($this->shmIpc && is_array($sock)) {
+            return trim($this->shm[$sock[0]]->get($sock[1]));
         } else {
             return trim(fgets($sock));
         }
@@ -219,7 +218,7 @@ class Process
             throw $e;
         }
 
-        $this->setBlocking($sock, 1);
+        $this->setBlocking(false, $sock, 1);
         $this->send($sock, $desc);
         if($this->read($sock) == self::CMD_SUCC) {
             return true;
@@ -516,16 +515,16 @@ class Process
         for($i = 0; $i < $childnum; $i++) {
             list($lock, $m) = $this->ipcChannel($key, $channelSize);
             if(($cpid = $this->fork()) === 0) {
-                $this->sockpid($lock);
+                $this->sockpid($key, $lock);
                 $this->lock = $lock;
                 return 0;
             }
-            $this->sockpid($m, $cpid);
+            $this->sockpid($key, $m, $cpid);
             $s[] = $m;
         }
 
         $this->lockAccept($key, $s);
-
+        $this->destoryShm($key);
         return 1;
     }
 
@@ -592,12 +591,12 @@ class Process
         return false;
     }
 
-    protected function sockpid(&$sock, $pid = 0)
+    protected function sockpid($key, &$sock, $pid = 0)
     {
         if(!$sock && $pid) {
-            $sock = $pid;
+            $sock = [$key, $pid];
         }else if(!$sock && $this->shmIpc) {
-            $sock = $this->getpid();
+            $sock = [$key, $this->getpid()];
         }
     }
 
@@ -627,10 +626,10 @@ class Process
             $pid = $this->fork();
             if($pid > 0) {
                 $this->myChildProcess[$mainId][$pid] = $i;
-                $this->sockpid($this->mainSockPool[$mainId][$i], $pid);
+                $this->sockpid($mainId, $this->mainSockPool[$mainId][$i], $pid);
                 continue;
             } else {
-                $this->sockpid($cport);
+                $this->sockpid($mainId, $cport);
                 $this->setBlocking($cport, 1);
 
                 $waitStatus = $this->waitMain($cport);
@@ -679,6 +678,7 @@ class Process
 
         $this->processLoop($mainSockPoolId);
         $this->wait();
+        $this->destoryShm($mainSockPoolId);
         return 1;
     }
 
@@ -704,11 +704,11 @@ class Process
 
     private function select($key, &$read, &$write, &$except, $tv_usec = 0)
     {
-        if($this->shmIpc) {
+        if($key && $this->shmIpc) {
             $update = [];
             $changeNum = 0;
             foreach($read as $pid) {
-                if($this->shm[$key]->hasChange($pid)) {
+                if($this->shm[$key]->hasChange($pid[1])) {
                     $update[] = $pid;
                     $changeNum++;
                 }
@@ -716,7 +716,7 @@ class Process
             $read = $update;
             $update = [];
             foreach($write as $pid) {
-                if($this->shm[$key]->hasChange($pid)) {
+                if($this->shm[$key]->hasChange($pid[1])) {
                     $update[] = $pid;
                     $changeNum++;
                 }
@@ -777,9 +777,9 @@ class Process
         if(!$this->processLoop($mainSockPoolId, function ($exitIdx) use ($mainSockPoolId, $callable, $channelSize) {
                 list($nport, $cport) = $this->ipcChannel($mainSockPoolId, $channelSize);
                 $npid = $this->fork();
-                $this->sockpid($nport, $npid);
+                $this->sockpid($mainSockPoolId, $nport, $npid);
                 if($npid == 0) {
-                    $this->sockpid($cport);
+                    $this->sockpid($mainSockPoolId, $cport);
                     $this->waitMain($cport);
                     if(is_callable($callable)) {
                         return call_user_func($callable);
@@ -802,6 +802,13 @@ class Process
     {
         return getmypid();
     }
+    
+    public function destoryShm($mid)
+    {
+        if($this->shmIpc) {
+            $this->shm[$mid]->destroy();
+        }
+    }
 
     public function fork()
     {
@@ -815,7 +822,7 @@ class Process
         return $pid;
     }
 
-    public function demon()
+    public function daemon()
     {
         if($this->fork() > 0) {
             exit;
@@ -875,15 +882,16 @@ class Process
      */
     public function guardFork($exitLoopCallable = null, $exitFlag = 'exit')
     {
+        $mainId = uniqid(__FUNCTION__);
         do {
             $pid = $this->fork();
-            list($m, $c) = $this->ipcChannel(__FUNCTION__, 30);
+            list($m, $c) = $this->ipcChannel($mainId, 30);
             if($pid == 0) {
-                $this->sockpid($c);
+                $this->sockpid($mainId, $c);
                 $this->childSock = $c;
                 return 0;
             }
-            $this->sockpid($m, $pid);
+            $this->sockpid($mainId, $m, $pid);
             do {
                 $res = $this->wait($pid, $status, 1);
 
@@ -897,6 +905,7 @@ class Process
             } while(true);
             usleep(10000);
         } while(true);
+        $this->destoryShm($mainId);
         return 1;
     }
 

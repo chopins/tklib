@@ -26,7 +26,7 @@ class ShareMemory
     private $projectSpace = '';
     private $workSpace = '';
     private $size = null;
-    private $permissions = 0666;
+    private $permissions = 0600;
     private $blocks = [];
     private $lastValue = [];
     public $enableJson = true;
@@ -54,7 +54,7 @@ class ShareMemory
      * @param string $project    a one character
      * @throws RuntimeException
      */
-    public function __construct($shmName, string $project, $size = null, int $permissions = 0666)
+    public function __construct($shmName, string $project, $size = null, int $permissions = 0600)
     {
         if(strlen($project) != 1) {
             throw new RuntimeException('project name only a one character');
@@ -68,6 +68,7 @@ class ShareMemory
 
         if(!file_exists($this->projectSpace)) {
             mkdir($this->projectSpace, $this->permissions, true);
+            chmod($this->projectSpace, $this->permissions|0700);
         } elseif(!is_dir($this->projectSpace)) {
             throw new RuntimeException("$this->projectSpace is not directory");
         }
@@ -94,6 +95,9 @@ class ShareMemory
     public function hasChange($varName)
     {
         $key = $this->varKey($varName);
+        if(!shm_has_var($this->shm, $key)) {
+            return false;
+        }
         $v = shm_get_var($this->shm, $key);
         $v = $this->decode($v);
         if(empty($v[1]) || $v[1] > $this->lastValue[$key]) {
@@ -109,7 +113,7 @@ class ShareMemory
         }
     }
 
-    protected function varKey($name)
+    protected function varKey(string $name)
     {
         $this->unConnect();
         $file = $this->workSpace . '/' . $name;
@@ -120,7 +124,7 @@ class ShareMemory
     protected function setSize($size)
     {
         if($size) {
-            $this->size = Byte::toByte($size);
+            $this->size = Byte::toByte($size) * 8;
         } else {
             $iniVar = ini_get('sysvshm.init_mem');
             $this->size = empty($iniVar) ? 10000 : $iniVar;
@@ -131,10 +135,12 @@ class ShareMemory
     {
         $this->workSpace = $this->projectSpace . '/' . $this->project . '@' . $shmName;
         if(!file_exists($this->workSpace)) {
-            mkdir($this->workSpace);
+            mkdir($this->workSpace, $this->permissions);
+            chmod($this->workSpace, $this->permissions|0700);
         } elseif(!is_dir($this->workSpace)) {
             throw new RuntimeException("$this->workSpace is not directory");
         }
+
         $key = ftok($this->workSpace, $this->project);
         $this->shm = shm_attach($key, $this->size, $this->permissions);
         return (bool) $this->shm;
@@ -174,7 +180,7 @@ class ShareMemory
         do {
             $v = shm_get_var($this->shm, $key);
             $v = $this->decode($v);
-            if(empty($v[1]) || $v[1] > $this->lastValue[$key]) {
+            if(empty($v[1]) || empty($this->lastValue[$key]) || $v[1] > $this->lastValue[$key]) {
                 return $v[0];
             }
             usleep(100000);

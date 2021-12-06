@@ -10,7 +10,8 @@
 
 namespace Toknot\Path;
 
-class Path {
+class Path
+{
 
     /**
      * join string to path
@@ -18,7 +19,8 @@ class Path {
      * @param string $path1
      * @return string
      */
-    public static function join(...$paths) {
+    public static function join(...$paths)
+    {
         return DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $paths);
     }
 
@@ -29,15 +31,16 @@ class Path {
      * @param string $cwd
      * @return string
      */
-    public static function realpath($path, $cwd = '') {
-        if (empty($cwd)) {
+    public static function realpath($path, $cwd = '')
+    {
+        if(empty($cwd)) {
             $cwd = getcwd();
         }
-        if ($path{0} == '/') {
+        if($path[0]== '/') {
             return $path;
-        }
+        } 
 
-        if (preg_match('/^[a-z]:\\\//i', $path)) {
+        if(preg_match('/^[a-z]:\\\//i', $path)) {
             return $path;
         }
 
@@ -52,8 +55,9 @@ class Path {
      * @param boolean $recursion
      * @return boolean
      */
-    public static function rmdir($folder, $recursion = false) {
-        if ($recursion === false) {
+    public static function rmdir($folder, $recursion = false)
+    {
+        if($recursion === false) {
             return rmdir($folder);
         }
         $dir = rtrim($folder, DIRECTORY_SEPARATOR);
@@ -67,20 +71,21 @@ class Path {
      * @param callable $callable        opreate file
      * @param callable $dirCallable     opreate dir
      */
-    public static function dirWalk($dir, $callable, $dirCallable = null) {
+    public static function dirWalk($dir, $callable, $dirCallable = null)
+    {
         $d = dir($dir);
-        while (false !== ($enter = $d->read())) {
-            if ($enter == '.' || $enter == '..') {
+        while(false !== ($enter = $d->read())) {
+            if($enter == '.' || $enter == '..') {
                 continue;
             }
             $path = $dir . DIRECTORY_SEPARATOR . $enter;
-            if (is_dir($path)) {
+            if(is_dir($path)) {
                 self::dirWalk($path, $callable, $dirCallable);
             } else {
                 $callable($path);
             }
         }
-        if ($dirCallable) {
+        if($dirCallable) {
             return $dirCallable($dir);
         }
         return true;
@@ -94,19 +99,84 @@ class Path {
      * @param string $ext
      * @return string
      */
-    public static function randPath($dir, $filePrefix = '', $ext = '') {
+    public static function randPath($dir, $filePrefix = '', $ext = '')
+    {
         $char = md5(uniqid($filePrefix, true));
         return rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filePrefix . $char . $ext;
     }
 
-    public static function getDayPath($dir, $prefix = '', $ext = '') {
+    public static function getDayPath($dir, $prefix = '', $ext = '')
+    {
         $char = date('Y-m-d');
         return rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $prefix . $char . $ext;
     }
 
-    public static function getTimePath($dir, $prefix = '', $ext = '') {
+    public static function getTimePath($dir, $prefix = '', $ext = '')
+    {
         $char = time();
         return rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $prefix . $char . $ext;
+    }
+
+    public static function chmod($path, $permissions)
+    {
+        if(is_int($permissions)) {
+            return chmod($path, $permissions);
+        }
+        $perms = explode(',', $permissions);
+        $sym = ['ugoa+-=rwxXst'];
+        foreach($perms as $p) {
+            $l = strlen($p);
+            for($i = 0;$i < $l;$i++) {
+                switch($p[$i]) {
+                    case 'u':
+                        $move = 7;
+                        break;
+                    case 'g':
+                        $move = $move < 4 ? 4 : $move;
+                        break;
+                    case 'o':
+                        $move = $move < 1 ? 1 : $move;
+                        break;
+                    case 'a':
+                        $move = 7;
+                        break;
+                    case '+':
+                        break;
+                    case '-':
+                        break;
+                    case '=':
+                        break;
+                    case 'r':
+                        $mask = 2 << $move;
+                        break;
+                    case 'w':
+                        
+                        break;
+                    case 'x':
+                        break;
+                    case 'X':
+                        break;
+                    case 's':
+                        break;
+                    case 't':
+                        break;
+                    default:
+                        throw new ValueError('Argument #2 ($permissions) must be \'ugoa-+=rwxXst\'');
+                        break;
+                }
+            }
+        }
+    }
+    
+    /**
+     * same as __FILE__
+     * 
+     * @return string
+     */
+    public static function getPath()
+    {
+        $trace = debug_backtrace(0,1);
+        return $trace[0]['file'];
     }
 
 }

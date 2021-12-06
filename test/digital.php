@@ -3,7 +3,7 @@
 use Toknot\Math\Chinese;
 use Toknot\Math\Byte;
 
-include_once __DIR__.'/autoload.php';
+include_once __DIR__.'/../autoload.php';
 echo new Chinese(0, false, 2);
 echo PHP_EOL;
 echo new Chinese(100001274, true);
