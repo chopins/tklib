@@ -14,24 +14,24 @@ define('FILE_NEW_APPEND', max(FILE_APPEND, FILE_USE_INCLUDE_PATH, LOCK_EX) * 2);
 function sortBySubVal(array &$arr, $subKey, $sortFlag = SORT_REGULAR, $reverse = 0)
 {
     usort($arr, function ($a, $b) use ($subKey, $sortFlag, $reverse) {
-        if ($reverse) {
+        if($reverse) {
             list($b, $a) = [$a, $b];
         }
-        if ($sortFlag & SORT_STRING & SORT_FLAG_CASE) {
+        if($sortFlag & SORT_STRING & SORT_FLAG_CASE) {
             return strcasecmp($a[$subKey], $b[$subKey]);
-        } else if ($sortFlag & SORT_NATURAL & SORT_FLAG_CASE) {
+        } else if($sortFlag & SORT_NATURAL & SORT_FLAG_CASE) {
             return strnatcasecmp($a[$subKey], $b[$subKey]);
         }
-        switch ($sortFlag) {
-            case  SORT_LOCALE_STRING:
+        switch($sortFlag) {
+            case SORT_LOCALE_STRING:
                 return strcoll($a, $b);
             case SORT_NATURAL:
                 return strnatcmp($a[$subKey], $b[$subKey]);
             case SORT_STRING:
                 return strcmp($a[$subKey], $b[$subKey]);
             case SORT_NUMERIC:
-                $av = is_numeric($a[$subKey]) ? $a[$subKey] * 1 : (int)$a[$subKey];
-                $bv = is_numeric($b[$subKey]) ? $b[$subKey] * 1 : (int)$b[$subKey];
+                $av = is_numeric($a[$subKey]) ? $a[$subKey] * 1 : (int) $a[$subKey];
+                $bv = is_numeric($b[$subKey]) ? $b[$subKey] * 1 : (int) $b[$subKey];
                 return $av > $bv ? 1 : ($av == $bv ? 0 : -1);
             case SORT_REGULAR:
                 return $a[$subKey] > $b[$subKey] ? 1 : ($a[$subKey] == $b[$subKey] ? 0 : -1);
@@ -51,22 +51,22 @@ function sortBySubVal(array &$arr, $subKey, $sortFlag = SORT_REGULAR, $reverse =
  */
 function strFind(string $content, $start, $end, $offset, &$findPos = 0)
 {
-    if (is_string($start)) {
+    if(is_string($start)) {
         $startlen = mb_strlen($start);
     } else {
         $startlen = $start[1];
         $start = $start[0];
     }
-    if ($offset < 0) {
+    if($offset < 0) {
         $startPos = mb_strrpos($content, $start, $offset);
     } else {
         $startPos = mb_strpos($content, $start, $offset);
     }
-    if ($startPos === false) {
+    if($startPos === false) {
         return false;
     }
     $endPos = mb_strpos($content, $end, $startPos + $startlen);
-    if ($endPos === false) {
+    if($endPos === false) {
         return false;
     }
     $findPos = $startPos;
@@ -82,6 +82,7 @@ function strFind(string $content, $start, $end, $offset, &$findPos = 0)
  */
 class SmartStrPos
 {
+
     private $offset = 0;
     private $trail = 0;
     private $content = '';
@@ -110,7 +111,7 @@ class SmartStrPos
     public function reset()
     {
         $this->offset = 0;
-        $this->trail  = 0;
+        $this->trail = 0;
         $this->content = $this->bakContent;
     }
 
@@ -125,10 +126,10 @@ class SmartStrPos
      */
     public function limit($needle)
     {
-        if ($needle === 0) {
+        if($needle === 0) {
             $this->content = $this->bakContent;
             return 0;
-        } elseif (is_int($needle)) {
+        } elseif(is_int($needle)) {
             $this->content = mb_substr($this->content, 0, $needle);
             return $needle;
         }
@@ -145,7 +146,7 @@ class SmartStrPos
     protected function iterator(string $name, $args)
     {
         $class = self::class;
-        if ($name[0] != 'g') {
+        if($name[0] != 'g') {
             throw new Error("Call to undefined method $class::$name()", E_USER_ERROR);
         }
         $method = lcfirst(substr($name, 1));
@@ -153,22 +154,23 @@ class SmartStrPos
             'back', 'next', 'nextSub', 'backRange', 'backSub', 'nextPair',
             'nextPairMatch', 'nextRange', ''
         ];
-        if (!in_array($method, $funcList)) {
+        if(!in_array($method, $funcList)) {
             throw new Error("Call to undefined method $class::$name()", E_USER_ERROR);
         }
         do {
             $ret = call_user_func_array([$this, $method], $args);
-            if ($ret === false) {
+            if($ret === false) {
                 return $ret;
             }
             yield $ret;
-        } while (true);
+        } while(true);
     }
 
     private function trailPos(string $needle)
     {
         $this->trail = $this->offset + mb_strlen($needle);
     }
+
     /**
      * 从当前偏移量回退查找第一个出现的$needle
      *
@@ -179,8 +181,8 @@ class SmartStrPos
     public function back(string $needle, bool $move = true)
     {
         $coffset = mb_strrpos($this->content, $needle, $this->offset - $this->contentLen);
-        if ($coffset !== false && $move) {
-            $this->offset  = $coffset;
+        if($coffset !== false && $move) {
+            $this->offset = $coffset;
             $this->trailPos($needle);
         }
         return $coffset;
@@ -207,11 +209,11 @@ class SmartStrPos
     public function next(string $needle, bool $move = true)
     {
         $coffset = mb_strpos($this->content, $needle, $this->trail);
-        if ($coffset !== false && $move) {
-            $this->offset  = $coffset;
+        if($coffset !== false && $move) {
+            $this->offset = $coffset;
             $this->trailPos($needle);
         }
-        return  $coffset;
+        return $coffset;
     }
 
     /**
@@ -225,13 +227,13 @@ class SmartStrPos
     {
         $current = $this->trail;
         $cur = $this->next($needle, false);
-        if ($cur === false) {
+        if($cur === false) {
             return false;
         }
-        if ($cur === $current) {
+        if($cur === $current) {
             return true;
         }
-        if ($ignoreEmpty) {
+        if($ignoreEmpty) {
             return empty(ltrim(mb_substr($this->content, $current, $cur - $current)));
         }
     }
@@ -245,8 +247,8 @@ class SmartStrPos
      */
     public function afterNearMatch(array $needle, $ignoreEmpty = false)
     {
-        foreach ($needle as $n) {
-            if ($this->afterNear($n, $ignoreEmpty)) {
+        foreach($needle as $n) {
+            if($this->afterNear($n, $ignoreEmpty)) {
                 return true;
             }
         }
@@ -255,8 +257,8 @@ class SmartStrPos
 
     public function beforeNearMatch(array $needle, $ignoreEmpty = false)
     {
-        foreach ($needle as $n) {
-            if ($this->beforeNear($n, $ignoreEmpty)) {
+        foreach($needle as $n) {
+            if($this->beforeNear($n, $ignoreEmpty)) {
                 return true;
             }
         }
@@ -274,13 +276,13 @@ class SmartStrPos
     {
         $current = $this->offset;
         $cur = $this->back($needle, false);
-        if ($cur === false) {
+        if($cur === false) {
             return false;
         }
-        if ($this->trail === $current) {
+        if($this->trail === $current) {
             return true;
         }
-        if ($ignoreEmpty) {
+        if($ignoreEmpty) {
             return empty(ltrim(mb_substr($this->content, $cur, $current - $cur)));
         }
     }
@@ -296,16 +298,16 @@ class SmartStrPos
     public function nextSub(string $start, string $end = null, $move = false)
     {
         $findPos = 0;
-        if (!$end) {
+        if(!$end) {
             $findPos = $this->next($start);
-            if (false === $findPos) {
+            if(false === $findPos) {
                 return false;
             }
             $str = $this->sub($findPos + mb_strlen($start));
         } else {
             $str = strFind($this->content, $start, $end, $this->trail, $findPos);
         }
-        if ($move && $str) {
+        if($move && $str) {
             $this->offset = $findPos;
             $this->trailPos($str);
         }
@@ -324,7 +326,7 @@ class SmartStrPos
     {
         $findPos = 0;
         $str = strFind($this->content, $start, $end, $this->offset - $this->contentLen, $findPos);
-        if ($move && $str) {
+        if($move && $str) {
             $this->offset = $findPos;
             $this->trailPos($str);
         }
@@ -340,7 +342,7 @@ class SmartStrPos
      */
     public function sub($start, $length = null)
     {
-        if ($length === null) {
+        if($length === null) {
             return mb_substr($this->content, $start);
         }
         return mb_substr($this->content, $start, $length);
@@ -355,8 +357,8 @@ class SmartStrPos
      */
     public function nextRange(string $start, string $end)
     {
-        $str = $this->nextSub($start, $end,  true);
-        if ($str) {
+        $str = $this->nextSub($start, $end, true);
+        if($str) {
             return self::begin($str);
         }
         return false;
@@ -372,7 +374,7 @@ class SmartStrPos
     public function backRange(string $start, string $end)
     {
         $str = $this->backSub($start, $end, true);
-        if ($str) {
+        if($str) {
             return self::begin($str);
         }
         return false;
@@ -391,13 +393,13 @@ class SmartStrPos
     {
         $pos = false;
         $prepos = mb_strpos($this->content, $str, $offset);
-        if ($prepos === false) {
+        if($prepos === false) {
             return $pos;
         }
-        foreach ($suffixArr as $suffix) {
+        foreach($suffixArr as $suffix) {
             $len = mb_strlen($str . $suffix);
             $pos = mb_strpos($this->content, $str . $suffix, $offset);
-            if ($pos !== false) {
+            if($pos !== false) {
                 break;
             }
         }
@@ -414,7 +416,7 @@ class SmartStrPos
     public function count($needle, $start = false)
     {
         $offsetContent = $this->content;
-        if ($start && $this->offset) {
+        if($start && $this->offset) {
             $offsetContent = mb_substr($this->content, $this->offset);
         }
         return mb_substr_count($offsetContent, $needle);
@@ -452,7 +454,7 @@ class SmartStrPos
     {
         $startPos = $this->next($startPairFlag);
 
-        if ($startPos === false) {
+        if($startPos === false) {
             return false;
         }
         $needleLen = mb_strlen($startPairFlag);
@@ -462,41 +464,42 @@ class SmartStrPos
         $endPairLen = mb_strlen($endPair);
 
         do {
-            if ($endPairSuffix) {
+            if($endPairSuffix) {
                 $endPos = $this->match($endPair, $endPairSuffix, $endPosOffset, $endPairLen);
             } else {
                 $endPos = mb_strpos($this->content, $endPair, $endPosOffset);
             }
 
-            if (!$endPos) {
+            if(!$endPos) {
                 return false;
             }
-            if ($startPairSuffix) {
+            if($startPairSuffix) {
                 $pairPos = $this->match($startPair, $startPairSuffix, $pairPosOffset, $pairLen);
             } else {
                 $pairPos = mb_strpos($this->content, $startPair, $pairPosOffset);
             }
 
-            if ($pairPos && $pairPos < $endPos) {
+            if($pairPos && $pairPos < $endPos) {
                 $str = mb_substr($this->content, $startPos + $needleLen, $endPos - $startPos - $needleLen);
                 $this->offset = $startPos;
                 $this->trail = $endPos + mb_strlen($endPair);
                 return self::begin($str);
-            } elseif ($pairPos === $endPos) {
+            } elseif($pairPos === $endPos) {
                 throw new RangeException('start and end pair name is ambiguous');
             }
             $endPosOffset = $endPos + $endPairLen;
             $pairPosOffset = $pairPos + $pairLen;
-            if ($endPosOffset > $this->contentLen || $pairPosOffset > $this->contentLen) {
+            if($endPosOffset > $this->contentLen || $pairPosOffset > $this->contentLen) {
                 return false;
             }
-        } while (true);
+        } while(true);
     }
 
     public function trail()
     {
         return $this->trail;
     }
+
     public function pos()
     {
         return $this->offset;
@@ -506,10 +509,12 @@ class SmartStrPos
     {
         return new static($content);
     }
+
     public function __get($name)
     {
         return $this->$name;
     }
+
     public function __toString()
     {
         return $this->content;
@@ -518,11 +523,12 @@ class SmartStrPos
     public static function __set_state($properties)
     {
         $pos = new static($properties['content'], $properties['offset']);
-        foreach ($properties as $name => $v) {
+        foreach($properties as $name => $v) {
             $pos->$name = $v;
         }
         return $pos;
     }
+
 }
 
 function smartStrPos(string $content, int $offset = 0)
@@ -537,7 +543,7 @@ function ffmpegGetMediaMeta($file, $key, $flag)
         'AV_DICT_DONT_STRDUP_KEY' => 4, 'AV_DICT_DONT_STRDUP_VAL' => 8,
         'AV_DICT_DONT_OVERWRITE' => 16, 'AV_DICT_APPEND' => 32, 'AV_DICT_MULTIKEY' => 64
     ];
-    if (!isset($flags[$flag])) {
+    if(!isset($flags[$flag])) {
         trigger_error('av dict flags error', E_USER_NOTICE);
         return false;
     }
@@ -594,17 +600,17 @@ function ffmpegGetMediaMeta($file, $key, $flag)
 
     $ffi->avformat_open_input(FFI::addr($fmtCtx), $file, NULL, NULL);
     $ret = [];
-    if (empty($key)) {
-        $key  = '';
-        while (($tag = $ffi->av_dict_get($fmtCtx->metadata, $key, $tag, $flags[$flag]))) {
+    if(empty($key)) {
+        $key = '';
+        while(($tag = $ffi->av_dict_get($fmtCtx->metadata, $key, $tag, $flags[$flag]))) {
             var_dump($tag);
-            $key  = FFI::string($tag->key);
+            $key = FFI::string($tag->key);
             $tagValue = FFI::string($tag->value);
             $ret[$key] = $tagValue;
         }
     } else {
         $tag = $ffi->av_dict_get($fmtCtx->metadata, '', $tag, $flags[$flag]);
-        $key  = FFI::string($tag->key);
+        $key = FFI::string($tag->key);
         $tagValue = FFI::string($tag->value);
         $ret[$key] = $tagValue;
     }
@@ -618,7 +624,7 @@ function getVideoMeta($file): array
     $output = [];
     exec($command, $output, $returnVar);
     exec("mplayer -nolirc -vo null -ao null -frames 0 -identify '$file' 2>&1", $output, $returnVar);
-    if ($returnVar > 0) {
+    if($returnVar > 0) {
         trigger_error('use mplayer get video meta error');
         return [];
     }
@@ -640,10 +646,10 @@ function getVideoMeta($file): array
     $videoInfoArr = explode(',', $meta['Stream #0'][0]);
     $sarWH = [0, 0];
     $sarValue = 0;
-    foreach ($videoInfoArr as $vinfo) {
-        if (($idx = strpos($vinfo, 'Video:')) !== false) {
+    foreach($videoInfoArr as $vinfo) {
+        if(($idx = strpos($vinfo, 'Video:')) !== false) {
             list($codename) = explode(' ', trim(substr($vinfo, $idx)), 2);
-        } elseif (strpos($vinfo, '[SAR') !== false) {
+        } elseif(strpos($vinfo, '[SAR') !== false) {
             $size = explode(' ', trim($vinfo));
             $sarWH = explode(':', $size[2]);
             $sarValue = round($sarWH[0] / $sarWH[1], 6);
@@ -651,10 +657,10 @@ function getVideoMeta($file): array
     }
     $pixfmt = trim($videoInfoArr[1]);
     $audioInfo = explode(',', $meta['Stream #0'][1]);
-    foreach ($audioInfo as $ainfo) {
-        if (($idx = strpos($ainfo, 'Audio:')) !== false) {
+    foreach($audioInfo as $ainfo) {
+        if(($idx = strpos($ainfo, 'Audio:')) !== false) {
             list($acodename) = explode(' ', trim(substr($ainfo, $idx)), 2);
-        } elseif (strpos($ainfo, 'Hz') !== false) {
+        } elseif(strpos($ainfo, 'Hz') !== false) {
             list($hz) = explode(' ', trim($ainfo), 2);
         }
     }
@@ -693,18 +699,18 @@ function getVideoMeta($file): array
  */
 function arrayFind(array $array, $needle, $equal = true)
 {
-    if (is_array($needle)) {
+    if(is_array($needle)) {
         $return = [];
-        foreach ($needle as $v) {
+        foreach($needle as $v) {
             $return[$v] = arrayFind($array, $v, $equal);
         }
         return $return;
     } else {
-        if ($equal) {
+        if($equal) {
             return array_search($needle, $array);
         }
-        foreach ($array as $idx => $line) {
-            if (strpos($line, $needle) !== false) {
+        foreach($array as $idx => $line) {
+            if(strpos($line, $needle) !== false) {
                 return $idx;
             }
         }
@@ -725,11 +731,11 @@ function getStrFieldValue(string $str, array $seplist = ['=', ':'], string &$fie
     $line = trim($str);
     $line = str_replace($seplist, '=', $line);
     parse_str($line, $result);
-    if ($field) {
-        if (isset($result[$field])) {
+    if($field) {
+        if(isset($result[$field])) {
             return trim($result[$field]);
         }
-        return  null;
+        return null;
     } else {
         $field = trim(key($result));
         return trim(current($result));
@@ -739,8 +745,8 @@ function getStrFieldValue(string $str, array $seplist = ['=', ':'], string &$fie
 function isPrefix($str, $prefix)
 {
     $prefix = is_scalar($prefix) ? [$prefix] : $prefix;
-    foreach ($prefix as $p) {
-        if (strpos($str, $p) === 0) {
+    foreach($prefix as $p) {
+        if(strpos($str, $p) === 0) {
             return true;
         }
     }
@@ -749,8 +755,8 @@ function isPrefix($str, $prefix)
 
 function hasStr($str, $list = [])
 {
-    foreach ($list as $s) {
-        if (strpos($str, $s) >= 0) {
+    foreach($list as $s) {
+        if(strpos($str, $s) >= 0) {
             return true;
         }
     }
@@ -768,30 +774,30 @@ function arrayFindFieldValue(array $array, $needle, array $addSep = [], string $
 {
     $sep = ['=', ':'];
     $sep = array_merge($sep, $addSep);
-    if (is_array($needle)) {
+    if(is_array($needle)) {
         $return = [];
-        foreach ($needle as $v) {
+        foreach($needle as $v) {
             $hasParent = false;
             $field = $v;
-            if (strpos($v, $parentSep) > 0) {
+            if(strpos($v, $parentSep) > 0) {
                 list($parent, $field) = explode($parentSep, $v, 2);
                 $parent = trim($parent);
                 $field = trim($field);
                 $hasParent = true;
             }
 
-            foreach ($array as $n => $line) {
-                if ($hasParent) {
+            foreach($array as $n => $line) {
+                if($hasParent) {
                     $pval = getStrFieldValue($line, [$parentSep], $parent);
-                    if ($pval !== null) {
+                    if($pval !== null) {
                         $hasParent = false;
                     }
                 }
-                if (!$hasParent) {
+                if(!$hasParent) {
                     $val = getStrFieldValue($line, $sep, $field);
-                    if ($val !== null) {
-                        if (isset($return[$v])) {
-                            if (!is_array($return[$v])) {
+                    if($val !== null) {
+                        if(isset($return[$v])) {
+                            if(!is_array($return[$v])) {
                                 $return[$v] = [$return[$v], $val];
                             } else {
                                 $return[$v][] = $return[$v];
@@ -805,9 +811,9 @@ function arrayFindFieldValue(array $array, $needle, array $addSep = [], string $
         }
         return empty($return) ? null : $return;
     } else {
-        foreach ($array as $line) {
+        foreach($array as $line) {
             $val = getStrFieldValue($line, $sep, $needle);
-            if ($val !== null) {
+            if($val !== null) {
                 return $val;
             }
         }
@@ -817,10 +823,10 @@ function arrayFindFieldValue(array $array, $needle, array $addSep = [], string $
 
 function getDirFile($path)
 {
-    $d =  dir($path);
+    $d = dir($path);
     $file = [];
-    while (false !== ($f = $d->read())) {
-        if ($f == '.' || $f == '..') {
+    while(false !== ($f = $d->read())) {
+        if($f == '.' || $f == '..') {
             continue;
         }
         $file[] = $f;
@@ -832,8 +838,8 @@ function calThreshold($number, $threshold, $sep = '')
 {
     $res = [];
     $int = floor($number);
-    foreach ($threshold as $val) {
-        if ($int >= $val) {
+    foreach($threshold as $val) {
+        if($int >= $val) {
             $res[] = floor($int / $val);
             $int = $int % $val;
         } else {
@@ -851,10 +857,10 @@ function getTTYSize()
 
 function isFloatNumber($number)
 {
-    if (!is_numeric($number)) {
+    if(!is_numeric($number)) {
         return false;
     }
-    if (strpos($number, '.')) {
+    if(strpos($number, '.')) {
         return true;
     }
     return false;
@@ -862,7 +868,7 @@ function isFloatNumber($number)
 
 function getDecimal($number)
 {
-    if (isFloatNumber($number)) {
+    if(isFloatNumber($number)) {
         list(, $decimal) = explode('.', $number);
         return $decimal;
     }
@@ -871,7 +877,7 @@ function getDecimal($number)
 
 function videoTime($time)
 {
-    if (is_numeric($time)) {
+    if(is_numeric($time)) {
         $res = calThreshold($time, [3600, 60]);
         array_walk($res, function (&$v) {
             $v = str_pad($v, 2, 0, STR_PAD_LEFT);
@@ -883,7 +889,7 @@ function videoTime($time)
         $res = explode(':', $time);
 
         $len = count($res);
-        if ($len >= 3) {
+        if($len >= 3) {
             $res[0] = $res[0] * 3600;
             $res[1] = $res[1] * 60;
         } else {
@@ -908,7 +914,7 @@ function fetch(string $url, $opt = [])
 function checkStrSuffix($str, $endStr)
 {
     $idx = strpos($str, $endStr);
-    if ((strlen($str) - $idx) === strlen($endStr)) {
+    if((strlen($str) - $idx) === strlen($endStr)) {
         return true;
     }
     return false;
@@ -918,9 +924,9 @@ function isUpDomain($subDomain, $upDomain)
 {
     $subLvl = substr_count($subDomain, '.');
     $upLvl = substr_count($upDomain, '.');
-    if ($upLvl == $subLvl && $subDomain == $upDomain) {
+    if($upLvl == $subLvl && $subDomain == $upDomain) {
         return 0;
-    } elseif ($upLvl < $subLvl && checkStrSuffix($subDomain, ".$upDomain")) {
+    } elseif($upLvl < $subLvl && checkStrSuffix($subDomain, ".$upDomain")) {
         return 1;
     }
     return -1;
@@ -934,6 +940,7 @@ function isUpDomain($subDomain, $upDomain)
  */
 class Fetch
 {
+
     private string $data = '';
     private $retCode = 0;
     private string $error = '';
@@ -954,38 +961,39 @@ class Fetch
      */
     public static bool $CURL_CONNET_REUSE = true;
     public static $ch1 = null;
+
     public function __construct($url, $opt = [])
     {
         if(!self::$ch1 || !self::$CURL_CONNET_REUSE) {
             self::$ch1 = curl_init();
         }
 
-        $defOpt  = [
+        $defOpt = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => self::$CURLOPT_CONNECTTIMEOUT,
             CURLOPT_URL => $url,
             CURLOPT_AUTOREFERER => true,
             CURLOPT_FOLLOWLOCATION => self::$CURLOPT_FOLLOWLOCATION,
-            CURLOPT_MAXREDIRS =>  self::$CURLOPT_MAXREDIRS,
+            CURLOPT_MAXREDIRS => self::$CURLOPT_MAXREDIRS,
             CURLOPT_DNS_USE_GLOBAL_CACHE => self::$CURLOPT_DNS_USE_GLOBAL_CACHE,
         ];
-        if (self::$autoLastReferer) {
+        if(self::$autoLastReferer) {
             $defOpt[CURLOPT_REFERER] = self::$lastUrl;
         }
 
         self::$lastUrl = $url;
-        if (isset($opt[CURLOPT_URL])) {
+        if(isset($opt[CURLOPT_URL])) {
             self::$lastUrl = $opt[CURLOPT_URL];
         }
 
-        if (self::$CURLOPT_USERAGENT !== null) {
+        if(self::$CURLOPT_USERAGENT !== null) {
             $defOpt[CURLOPT_USERAGENT] = self::$CURLOPT_USERAGENT;
         }
-        if (self::$CURLOPT_COOKIE !== null) {
-            if (is_array(self::$CURLOPT_COOKIE)) {
-                $host = parse_url($url,  PHP_URL_HOST);
-                foreach (self::$CURLOPT_COOKIE as $cookeDomain => $cookie) {
-                    if (isUpDomain($host, $cookeDomain) >= 0) {
+        if(self::$CURLOPT_COOKIE !== null) {
+            if(is_array(self::$CURLOPT_COOKIE)) {
+                $host = parse_url($url, PHP_URL_HOST);
+                foreach(self::$CURLOPT_COOKIE as $cookeDomain => $cookie) {
+                    if(isUpDomain($host, $cookeDomain) >= 0) {
                         $defOpt[CURLOPT_COOKIE] = $cookie;
                     }
                 }
@@ -993,13 +1001,13 @@ class Fetch
                 $defOpt[CURLOPT_COOKIE] = self::$CURLOPT_COOKIE;
             }
         }
-        foreach ($opt as $key => $val) {
+        foreach($opt as $key => $val) {
             $defOpt[$key] = $val;
         }
         curl_setopt_array(self::$ch1, $defOpt);
         $this->data = curl_exec(self::$ch1);
-        $this->retCode = curl_getinfo(self::$ch1,  CURLINFO_HTTP_CODE);
-        $this->errCode  = curl_errno(self::$ch1);
+        $this->retCode = curl_getinfo(self::$ch1, CURLINFO_HTTP_CODE);
+        $this->errCode = curl_errno(self::$ch1);
         $this->error = curl_error(self::$ch1);
         if(!self::$CURL_CONNET_REUSE) {
             curl_close(self::$ch1);
@@ -1028,8 +1036,9 @@ class Fetch
 
     public function __toString()
     {
-        return (string)$this->data;
+        return (string) $this->data;
     }
+
 }
 
 /**
@@ -1050,18 +1059,18 @@ function wget(string $url, string $output, $opt = [])
         '-O' => $output,
     ];
     $url = escapeshellarg($url);
-    if (isset($_ENV['WGET_USER_AGENT'])) {
+    if(isset($_ENV['WGET_USER_AGENT'])) {
         $defOpt['--user-agent'] = $_ENV['WGET_USER_AGENT'];
     }
-    foreach ($opt as $k => $v) {
+    foreach($opt as $k => $v) {
         $defOpt[$k] = $v;
     }
     $option = '';
-    foreach ($defOpt as $k => $v) {
+    foreach($defOpt as $k => $v) {
         $v = escapeshellarg($v);
-        if (is_numeric($k)) {
+        if(is_numeric($k)) {
             $option .= " $v";
-        } elseif (strlen($k) > 2) {
+        } elseif(strlen($k) > 2) {
             $option .= " $k=$v";
         } else {
             $option .= " $k $v";
@@ -1069,7 +1078,7 @@ function wget(string $url, string $output, $opt = [])
     }
     $returnVar = 0;
     passthru("wget $option $url", $returnVar);
-    if (file_exists($output) && !filesize($output) && $returnVar) {
+    if(file_exists($output) && !filesize($output) && $returnVar) {
         trigger_error("wget has error and file($output) size is 0, Removed!", E_USER_WARNING);
         unlink($output);
     }
@@ -1085,9 +1094,9 @@ function wget(string $url, string $output, $opt = [])
 function clearTTYLine($selfWidth = null)
 {
     static $ttywidth;
-    if (!$ttywidth && !$selfWidth) {
+    if(!$ttywidth && !$selfWidth) {
         list(, $ttywidth) = getTTYSize();
-    } elseif ($selfWidth) {
+    } elseif($selfWidth) {
         $ttywidth = $selfWidth;
     }
     echo "\r" . str_repeat(' ', $ttywidth);
@@ -1097,7 +1106,7 @@ function strCountNumerOfLetter($str, $isnum)
 {
     $letter = $isnum ? range(0, 9) : range('A', 'Z');
     $count = 0;
-    foreach ($letter as $num) {
+    foreach($letter as $num) {
         $count += mb_substr_count($str, $num);
     }
     return $count;
@@ -1113,9 +1122,9 @@ function strCountNumerOfLetter($str, $isnum)
  */
 function saveArray($file, $array, $option = 0)
 {
-    if ($option & FILE_APPEND) {
+    if($option & FILE_APPEND) {
         $var = '$_ARRAY';
-        if (!file_exists($file) || $option & FILE_NEW_APPEND) {
+        if(!file_exists($file) || $option & FILE_NEW_APPEND) {
             $var = "<?php $var = [];" . PHP_EOL . $var;
         }
         return file_put_contents($file, "{$var}[] = " . var_export($array, true) . ';' . PHP_EOL, $option);
@@ -1125,15 +1134,15 @@ function saveArray($file, $array, $option = 0)
 
 function pathJoin(...$args)
 {
-    $root =  '';
-    if (strpos($args[0], DIRECTORY_SEPARATOR) === 0) {
+    $root = '';
+    if(strpos($args[0], DIRECTORY_SEPARATOR) === 0) {
         $root = DIRECTORY_SEPARATOR;
     }
     array_walk($args, function (&$v) {
         $v = trim($v, '\\/ ');
     });
 
-    return  $root . join(DIRECTORY_SEPARATOR, $args);
+    return $root . join(DIRECTORY_SEPARATOR, $args);
 }
 
 function rPathJoin(...$args)
@@ -1154,17 +1163,18 @@ function rPathJoin(...$args)
  */
 function rloopArray(array &$array, callable $callback, $userdata = null)
 {
-    foreach ($array as $k => &$v) {
+    foreach($array as $k => &$v) {
         $res = $callback($v, $k, $userdata);
-        if ($res !== null) {
+        if($res !== null) {
             return $res;
         }
-        if (is_array($v) && ($res = rloopArray($v, $callback, $userdata)) !== null) {
+        if(is_array($v) && ($res = rloopArray($v, $callback, $userdata)) !== null) {
             return $res;
         }
     }
     return null;
 }
+
 /**
  * 树查找，返回找到的路径
  * A B C
@@ -1176,13 +1186,13 @@ function rloopArray(array &$array, callable $callback, $userdata = null)
 function findTree(array $array, $value)
 {
     $treePath = [];
-    foreach ($array as $k => $v) {
-        if ($v === $value || (is_callable($value) && $value($v, $k) === 0)) {
+    foreach($array as $k => $v) {
+        if($v === $value || (is_callable($value) && $value($v, $k) === 0)) {
             $treePath[] = $k;
             return $treePath;
-        } elseif (is_array($v)) {
+        } elseif(is_array($v)) {
             $subTree = findTree($v, $value);
-            if (!empty($subTree)) {
+            if(!empty($subTree)) {
                 array_unshift($subTree, $k);
                 return $subTree;
             }
@@ -1198,27 +1208,31 @@ function strEndPos($str, $needle)
 
 class Csv
 {
+
     public static int $lineLength = 0;
     public static string $delimiter = ',';
     public static string $enclosure = '"';
     public static string $escape = '\\';
     private $fp = null;
+
     public function __construct(string $file)
     {
         $this->fp = fopen($file, 'rb');
     }
+
     public function read()
     {
-        if ($this->isEnd()) {
+        if($this->isEnd()) {
             return false;
         }
         return fgetcsv($this->fp, self::$lineLength, self::$delimiter, self::$enclosure, self::$escape);
     }
+
     public function readAll()
     {
         $this->reset();
         $ret = [];
-        while (false !== ($line = $this->read())) {
+        while(false !== ($line = $this->read())) {
             $ret[] = $line;
         }
         return $ret;
@@ -1231,7 +1245,7 @@ class Csv
 
     public function xRead()
     {
-        while (false !== ($line = $this->read())) {
+        while(false !== ($line = $this->read())) {
             yield $line;
         }
     }
@@ -1250,6 +1264,7 @@ class Csv
     {
         $this->close();
     }
+
 }
 
 /**
@@ -1265,17 +1280,17 @@ function multitaskProgress($cur, $total, $totalTaskNum, $taskIdx)
 {
     $tabSize = 8;
     list(, $ttywidth) = getTTYSize();
-    $tabNum  = floor($ttywidth/$totalTaskNum/$tabSize);
-    $fn = $cur/$total * 100;
+    $tabNum = floor($ttywidth / $totalTaskNum / $tabSize);
+    $fn = $cur / $total * 100;
     $p = 100 / ($tabSize * $tabNum);
-    $maskNum = floor($fn/$p);
+    $maskNum = floor($fn / $p);
     $mask = str_repeat('=', $maskNum);
     $mod = $fn % $p;
-    if($mod >= $p/2 && $mod < $p) {
+    if($mod >= $p / 2 && $mod < $p) {
         $mask .= '-';
     }
-    if($maskNum < ($totalTaskNum-1)) {
-        $mask .=  ($cur % 2 == 0 ? '\\': '/');
+    if($maskNum < ($totalTaskNum - 1)) {
+        $mask .= ($cur % 2 == 0 ? '\\' : '/');
     }
-    echo str_repeat("\t", $taskIdx * $tabNum) . $mask ."\r";
+    echo str_repeat("\t", $taskIdx * $tabNum) . $mask . "\r";
 }

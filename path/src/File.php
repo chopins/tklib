@@ -29,7 +29,8 @@ class File extends \SplFileObject {
         $this->isclose = true;
         $this->writer = function () {
             while ($this->isclose) {
-                $this->fwrite(yield);
+                $data = yield;
+                $this->fwrite($data);
             }
         };
     }
