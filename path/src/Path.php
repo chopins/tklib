@@ -173,10 +173,21 @@ class Path
      * 
      * @return string
      */
-    public static function getPath()
+    public static function getFilePath()
     {
         $trace = debug_backtrace(0,1);
         return $trace[0]['file'];
+    }
+    
+    /**
+     * Same as __DIR__
+     * 
+     * @return string
+     */
+    public static function getFileDir()
+    {
+        $trace = debug_backtrace(0,1);
+        return dirname($trace[0]['file']);
     }
 
 }
