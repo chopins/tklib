@@ -68,10 +68,11 @@ class Path
      * apply user supplied function to every number of folder dir and file
      * 
      * @param string $dir
-     * @param callable $callable        opreate file
+     * @param callable $callable        opreate file    smaliar : function($path) {}
      * @param callable $dirCallable     opreate dir
+     * @param boolean $skipRoot         whehter skip top directory, default not skip
      */
-    public static function dirWalk($dir, $callable, $dirCallable = null)
+    public static function dirWalk($dir, $callable, $dirCallable = null, $skipRoot = false)
     {
         $d = dir($dir);
         while(false !== ($enter = $d->read())) {
@@ -81,11 +82,11 @@ class Path
             $path = $dir . DIRECTORY_SEPARATOR . $enter;
             if(is_dir($path)) {
                 self::dirWalk($path, $callable, $dirCallable);
-            } else {
+            } elseif($callable) {
                 $callable($path);
             }
         }
-        if($dirCallable) {
+        if($dirCallable && !$skipRoot) {
             return $dirCallable($dir);
         }
         return true;

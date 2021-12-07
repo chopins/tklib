@@ -29,8 +29,10 @@ class Process
     protected $scheduleTable = [];
     protected $myChildProcess = [];
     protected $argv = [];
+    protected $parentPid = 0;
     public bool $shmIpc = false;
     public static $SHM_IPC_FLAG = 'P';
+    public static $SLEEP_USEC = 100000;
 
     const CMD_LOCK = 'LOCK';
     const CMD_UNLOCK = 'UNLOCK';
@@ -165,7 +167,7 @@ class Process
                 case $addpid:
                     $addpid = $this->recvTask($add, $local, $port);
             }
-            usleep(200000);
+            usleep(self::$SLEEP_USEC);
         }
         return 1;
     }
@@ -193,7 +195,7 @@ class Process
             $this->send($add, self::QUEUE_ADD . $message);
             $res = $this->read($add);
             $this->send($acp, $res);
-            usleep(30000);
+            usleep(self::$SLEEP_USEC);
         }
         exit;
     }
@@ -245,7 +247,7 @@ class Process
             $r = [];
             $w = [$get];
             $except = null;
-            $change = stream_select($r, $w, $except, 0, 200000);
+            $change = stream_select($r, $w, $except, 0, self::$SLEEP_USEC);
             if(false === $change) {
                 throw new \RuntimeException('task queue select fail');
             }
@@ -253,7 +255,7 @@ class Process
             if($change > 0) {
                 $this->execTask($w, $taskCall);
             }
-            usleep(30000);
+            usleep(self::$SLEEP_USEC);
         }
         exit;
     }
@@ -316,7 +318,7 @@ class Process
             $w = [];
             $except = null;
 
-            $change = stream_select($r, $w, $except, 0, 200000);
+            $change = stream_select($r, $w, $except, 0, self::$SLEEP_USEC);
             if(false === $change) {
                 throw new \RuntimeException('task queue select fail');
             }
@@ -324,7 +326,7 @@ class Process
             if($change > 0) {
                 $this->queueRequest($r, $taskQueue);
             }
-            usleep(30000);
+            usleep(self::$SLEEP_USEC);
         }
         exit;
     }
@@ -376,7 +378,7 @@ class Process
                 $queue->enqueue($task);
             }
             $cnt--;
-            usleep(30000);
+            usleep(self::$SLEEP_USEC);
         } while($cnt > 0);
     }
 
@@ -478,14 +480,14 @@ class Process
         while(true) {
             $write = $except = [];
             $read = $s;
-            $num = $this->select($key, $read, $write, $except, 100000);
+            $num = $this->select($key, $read, $write, $except, self::$SLEEP_USEC);
             if(!$num) {
                 continue;
             }
             foreach($read as $rs) {
                 $this->readAccept($rs, $lockpid);
             }
-            usleep(10000);
+            usleep(self::$SLEEP_USEC);
         }
     }
 
@@ -511,6 +513,7 @@ class Process
     {
         $s = [];
         $key = uniqid(__FUNCTION__);
+        $this->parentPid = $this->getpid();
         $channelSize = $childnum * 30;
         for($i = 0; $i < $childnum; $i++) {
             list($lock, $m) = $this->ipcChannel($key, $channelSize);
@@ -595,7 +598,7 @@ class Process
     {
         if(!$sock && $pid) {
             $sock = [$key, $pid];
-        }else if(!$sock && $this->shmIpc) {
+        } else if(!$sock && $this->shmIpc) {
             $sock = [$key, $this->getpid()];
         }
     }
@@ -612,7 +615,7 @@ class Process
     {
         if(!is_callable($callable) && is_array($callable)) {
             if(count($callable) !== $number) {
-                throw new \LengthException("callable number must eq 1 paramter value this is $number");
+                throw new \LengthException("callable number must eq #1 paramter value this is $number");
             }
             foreach($callable as $i => $func) {
                 if(!is_callable($func)) {
@@ -671,7 +674,7 @@ class Process
 
         $mainSockPoolId = uniqid(__FUNCTION__);
         $this->mainSockPool[$mainSockPoolId] = [];
-
+        $this->parentPid = $this->getpid();
         if(!$this->initMutiProcess($number, $mainSockPoolId, $callable)) {
             return 0;
         }
@@ -734,9 +737,9 @@ class Process
         while(count($this->myChildProcess[$mainId])) {
             $write = $except = [];
             $read = $this->mainSockPool[$mainId];
-            $num = $this->select($mainId, $read, $write, $except, 10000);
+            $num = $this->select($mainId, $read, $write, $except, self::$SLEEP_USEC);
             if(!$num) {
-                usleep(30000);
+                usleep(self::$SLEEP_USEC);
                 continue;
             }
             foreach($read as $rs) {
@@ -745,7 +748,7 @@ class Process
                     return 0;
                 }
             }
-            usleep(30000);
+            usleep(self::$SLEEP_USEC);
         }
     }
 
@@ -770,6 +773,8 @@ class Process
     {
         $mainSockPoolId = uniqid(__FUNCTION__);
         $this->mainSockPool[$mainSockPoolId] = [];
+        $this->parentPid = $this->getpid();
+
         if(!$this->initMutiProcess($number, $mainSockPoolId, $callable)) {
             return 0;
         }
@@ -802,7 +807,7 @@ class Process
     {
         return getmypid();
     }
-    
+
     public function destoryShm($mid)
     {
         if($this->shmIpc) {
@@ -883,6 +888,7 @@ class Process
     public function guardFork($exitLoopCallable = null, $exitFlag = 'exit')
     {
         $mainId = uniqid(__FUNCTION__);
+        $this->parentPid = $this->getpid();
         do {
             $pid = $this->fork();
             list($m, $c) = $this->ipcChannel($mainId, 30);
@@ -901,9 +907,9 @@ class Process
                 if($res == $pid) {
                     break;
                 }
-                usleep(50000);
+                usleep(self::$SLEEP_USEC);
             } while(true);
-            usleep(10000);
+            usleep(self::$SLEEP_USEC);
         } while(true);
         $this->destoryShm($mainId);
         return 1;
@@ -950,7 +956,7 @@ class Process
                 $this->wait($pid, $status, 1);
                 unset($pool[$pid]);
             }
-            usleep(30000);
+            usleep(self::$SLEEP_USEC);
         } while($loop && count($pool));
     }
 
@@ -1053,6 +1059,21 @@ class Process
         $path = realpath($args[0]);
         array_shift($args);
         pcntl_exec($path, $args);
+    }
+
+    public static function destoryAllIpcShm()
+    {
+        ShareMemory::destroyAll(self::$SHM_IPC_FLAG);
+    }
+
+    public function __destruct()
+    {
+        if($this->shmIpc) {
+            $curPid = $this->getpid();
+            if($curPid == $this->parentPid) {
+                self::destoryAllIpcShm();
+            }
+        }
     }
 
 }

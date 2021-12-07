@@ -23,8 +23,8 @@ class ShareMemory
 
     private $shm = null;
     private $project = null;
+    private $workspace = '';
     private $projectSpace = '';
-    private $workSpace = '';
     private $size = null;
     private $permissions = 0600;
     private $blocks = [];
@@ -63,19 +63,25 @@ class ShareMemory
         $this->permissions = $permissions;
         $this->setSize($size);
         $this->project = $project;
-        $location = self::$PHP_SHARE_MEMORY_STORE_LOCATION ?? sys_get_temp_dir();
-        $this->projectSpace = $location . '/' . self::$PHP_SHARE_MEMORY_KEY_SPACE;
 
-        if(!file_exists($this->projectSpace)) {
-            mkdir($this->projectSpace, $this->permissions, true);
-            chmod($this->projectSpace, $this->permissions|0700);
-        } elseif(!is_dir($this->projectSpace)) {
-            throw new RuntimeException("$this->projectSpace is not directory");
+        $this->workspace = self::getWorkspace();
+
+        if(!file_exists($this->workspace)) {
+            mkdir($this->workspace, $this->permissions, true);
+            chmod($this->workspace, $this->permissions | 0700);
+        } elseif(!is_dir($this->workspace)) {
+            throw new RuntimeException("$this->workspace is not directory");
         }
         $this->enableJson = function_exists('json_encode');
         $this->attach($shmName);
     }
-    
+
+    public static function getWorkspace()
+    {
+        $location = self::$PHP_SHARE_MEMORY_STORE_LOCATION ?? sys_get_temp_dir();
+        return $location . '/' . self::$PHP_SHARE_MEMORY_KEY_SPACE;
+    }
+
     protected function encode($v)
     {
         if($this->enableJson) {
@@ -83,7 +89,7 @@ class ShareMemory
         }
         return serialize($v);
     }
-    
+
     protected function decode($v)
     {
         if($this->enableJson) {
@@ -116,8 +122,10 @@ class ShareMemory
     protected function varKey(string $name)
     {
         $this->unConnect();
-        $file = $this->workSpace . '/' . $name;
-        touch($file);
+        $file = $this->projectSpace . '/' . $name;
+        if(!touch($file)) {
+            throw new \RuntimeException("touch $file error");
+        }
         return ftok($file, $this->project);
     }
 
@@ -133,15 +141,16 @@ class ShareMemory
 
     protected function attach($shmName)
     {
-        $this->workSpace = $this->projectSpace . '/' . $this->project . '@' . $shmName;
-        if(!file_exists($this->workSpace)) {
-            mkdir($this->workSpace, $this->permissions);
-            chmod($this->workSpace, $this->permissions|0700);
-        } elseif(!is_dir($this->workSpace)) {
-            throw new RuntimeException("$this->workSpace is not directory");
+        $this->projectSpace = $this->workspace . '/' . $this->project . '@' . $shmName;
+
+        if(!file_exists($this->projectSpace)) {
+            mkdir($this->projectSpace, $this->permissions);
+            chmod($this->projectSpace, $this->permissions | 0700);
+        } elseif(!is_dir($this->projectSpace)) {
+            throw new RuntimeException("$this->projectSpace is not directory");
         }
 
-        $key = ftok($this->workSpace, $this->project);
+        $key = ftok($this->projectSpace, $this->project);
         $this->shm = shm_attach($key, $this->size, $this->permissions);
         return (bool) $this->shm;
     }
@@ -156,9 +165,8 @@ class ShareMemory
     {
         $this->unConnect();
         $ret = shm_remove($this->shm);
-        if($ret) {
-            Path::rmdir($this->workSpace, true);
-        }
+        Path::rmdir($this->projectSpace, true);
+        
         return $ret;
     }
 
@@ -172,15 +180,17 @@ class ShareMemory
     {
         $key = $this->varKey($varname);
 
-        if(!empty($this->blocks[$key])) {
-            while(!shm_has_var($this->shm, $key)) {
-                usleep(100000);
-            }
-        }
         do {
+            $has = shm_has_var($this->shm, $key);
+            if(!$has && empty($this->blocks[$key])) {
+                return null;
+            } elseif(!$has) {
+                usleep(100000);
+                continue;
+            }
             $v = shm_get_var($this->shm, $key);
             $v = $this->decode($v);
-            if(empty($v[1]) || empty($this->lastValue[$key]) || $v[1] > $this->lastValue[$key]) {
+            if(empty($this->lastValue[$key]) || empty($this->blocks[$key]) || $v[1] > $this->lastValue[$key]) {
                 return $v[0];
             }
             usleep(100000);
@@ -222,9 +232,30 @@ class ShareMemory
         $key = $this->varKey($varname);
         $ret = shm_remove_var($this->shm, $key);
         if($ret) {
-            unlink($this->projectSpace . '/' . $varname);
+            unlink($this->workspace . '/' . $varname);
         }
         return $ret;
+    }
+
+    public static function destroyAll($p = null)
+    {
+        $workspace = self::getWorkspace();
+        if(!is_dir($workspace)) {
+            throw new RuntimeException("share memory workspace not exists");
+        }
+        Path::dirWalk($workspace, function ($path) {
+            unlink($path);
+        }, function ($dir) use ($p) {
+                list($project, $shmName) = explode('@', basename($dir));
+                if($p && $p != $project) {
+                    return;
+                }
+                $key = ftok($dir, $project);
+                $shm = shm_attach($key, null);
+                $r = shm_remove($shm);
+                rmdir($dir);
+                
+            }, true);
     }
 
 }
