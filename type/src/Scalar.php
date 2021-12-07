@@ -13,6 +13,16 @@ namespace Toknot\Type;
 class Scalar {
     protected $value = '';
     public function __toString() {
-        return $value;
+        return $this->value;
+    }
+    
+    public function getValue()
+    {
+        return $this->value;
+    }
+    
+    public function __get($name)
+    {
+        return $this->$name;
     }
 }
