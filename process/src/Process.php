@@ -669,7 +669,7 @@ class Process
      * @param int $number   if the number equal 0 is child process,  like fork() return
      * @return int
      */
-    public function multiProcess($number, $callable = null)
+    public function multiProcess($number, $callable = null, $mainCallable = null)
     {
 
         $mainSockPoolId = uniqid(__FUNCTION__);
@@ -678,7 +678,9 @@ class Process
         if(!$this->initMutiProcess($number, $mainSockPoolId, $callable)) {
             return 0;
         }
-
+        if($mainCallable) {
+            $mainCallable();
+        }
         $this->processLoop($mainSockPoolId);
         $this->wait();
         $this->destoryShm($mainSockPoolId);
