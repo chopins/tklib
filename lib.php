@@ -1,5 +1,7 @@
 <?php
 
+defined('HAVE_TKLIB_AUTOLOAD_' . md5(__DIR__ . '/autoload.php')) || die('must be include ' . __DIR__ . '/autoload.php');
+
 use Toknot\Type\Scalar;
 use Toknot\Type\Char;
 use Toknot\Path\Path;

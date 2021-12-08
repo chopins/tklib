@@ -1,7 +1,6 @@
 <?php
 
-include 'lib.php';
-
+define('HAVE_TKLIB_AUTOLOAD_' . md5(__FILE__), true);
 spl_autoload_register(function ($class) {
     $classPathInfo = explode('\\', $class);
     $filePath = [__DIR__, strtolower($classPathInfo[1]), 'src'];
@@ -9,7 +8,9 @@ spl_autoload_register(function ($class) {
     array_shift($classPathInfo);
     $filePath = array_merge($filePath, $classPathInfo);
     $classFile = join(DIRECTORY_SEPARATOR, $filePath) . '.php';
-    if (file_exists($classFile)) {
+    if(file_exists($classFile)) {
         include($classFile);
     }
 });
+
+include 'lib.php';
