@@ -140,7 +140,7 @@ class Path
         $chunk = [$dtpl];
         $eqperms = $k = $uidx = $pidx = 0;
         $j = 0;
-        $spuser = false;
+        $nouser = true;
         for($i = 0; $i < $len; $i++) {
             $bit = $perms[$i];
             if(isset($u[$bit])) {
@@ -152,7 +152,7 @@ class Path
                 } else {
                     $chunk[$j]['user'][$bit] = $u[$bit];
                 }
-                $spuser = true;
+                $nouser = false;
                 $uidx++;
             } elseif(in_array($bit, $p)) {
                 if($k != $uidx) {
@@ -191,11 +191,11 @@ class Path
                     } else {
                         $maskBit = 1 < ($b + $us1);
                     }
-                    if($seg['op'] == '+' && ($spuser || (!$spuser && $bn != 'w'))) {
+                    if($seg['op'] == '+' && (!$nouser || ($nouser && $bn != 'w'))) {
                         $fperms = $fperms & $maskBit;
-                    } elseif($seg['op'] == '-' && !($fperms & $maskBit) && ($spuser || (!$spuser && $bn != 'w'))) {
+                    } elseif($seg['op'] == '-' && !($fperms & $maskBit) && (!$nouser || ($nouser && $bn != 'w'))) {
                         $fperms = $fperms ^ $maskBit;
-                    } elseif($seg['op'] == '=' && ($spuser || (!$spuser && $bn != 'w'))) {
+                    } elseif($seg['op'] == '=' && (!$nouser || ($nouser && $bn != 'w'))) {
                         $eqperms = $eqperms & $maskBit;
                     }
                 }
