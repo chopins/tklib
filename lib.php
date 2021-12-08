@@ -1,6 +1,15 @@
 <?php
 
-define('FILE_NEW_APPEND', max(FILE_APPEND, FILE_USE_INCLUDE_PATH, LOCK_EX) * 2);
+use Toknot\Type\Scalar;
+use Toknot\Type\Char;
+use Toknot\Path\Path;
+use Toknot\Type\ArrayObject;
+use Toknot\Path\File;
+use Toknot\Type\SmartString;
+use Toknot\Network\SimpleCurl;
+use Toknot\Process\Console;
+use Toknot\Path\Csv as CsvFile;
+use Toknot\Path\Video;
 
 /**
  * 根据二维数组的子数组的键值排序
@@ -13,30 +22,7 @@ define('FILE_NEW_APPEND', max(FILE_APPEND, FILE_USE_INCLUDE_PATH, LOCK_EX) * 2);
  */
 function sortBySubVal(array &$arr, $subKey, $sortFlag = SORT_REGULAR, $reverse = 0)
 {
-    usort($arr, function ($a, $b) use ($subKey, $sortFlag, $reverse) {
-        if($reverse) {
-            list($b, $a) = [$a, $b];
-        }
-        if($sortFlag & SORT_STRING & SORT_FLAG_CASE) {
-            return strcasecmp($a[$subKey], $b[$subKey]);
-        } else if($sortFlag & SORT_NATURAL & SORT_FLAG_CASE) {
-            return strnatcasecmp($a[$subKey], $b[$subKey]);
-        }
-        switch($sortFlag) {
-            case SORT_LOCALE_STRING:
-                return strcoll($a, $b);
-            case SORT_NATURAL:
-                return strnatcmp($a[$subKey], $b[$subKey]);
-            case SORT_STRING:
-                return strcmp($a[$subKey], $b[$subKey]);
-            case SORT_NUMERIC:
-                $av = is_numeric($a[$subKey]) ? $a[$subKey] * 1 : (int) $a[$subKey];
-                $bv = is_numeric($b[$subKey]) ? $b[$subKey] * 1 : (int) $b[$subKey];
-                return $av > $bv ? 1 : ($av == $bv ? 0 : -1);
-            case SORT_REGULAR:
-                return $a[$subKey] > $b[$subKey] ? 1 : ($a[$subKey] == $b[$subKey] ? 0 : -1);
-        }
-    });
+    ArrayObject::sortBySubVal($arr, $subKey, $sortFlag, $reverse);
 }
 
 /**
@@ -51,26 +37,7 @@ function sortBySubVal(array &$arr, $subKey, $sortFlag = SORT_REGULAR, $reverse =
  */
 function strFind(string $content, $start, $end, $offset, &$findPos = 0)
 {
-    if(is_string($start)) {
-        $startlen = mb_strlen($start);
-    } else {
-        $startlen = $start[1];
-        $start = $start[0];
-    }
-    if($offset < 0) {
-        $startPos = mb_strrpos($content, $start, $offset);
-    } else {
-        $startPos = mb_strpos($content, $start, $offset);
-    }
-    if($startPos === false) {
-        return false;
-    }
-    $endPos = mb_strpos($content, $end, $startPos + $startlen);
-    if($endPos === false) {
-        return false;
-    }
-    $findPos = $startPos;
-    return trim(mb_substr($content, $startPos + $startlen, $endPos - $startPos - $startlen));
+    return Char::strFind($content, $start, $end, $offset, $findPos);
 }
 
 /**
@@ -80,613 +47,24 @@ function strFind(string $content, $start, $end, $offset, &$findPos = 0)
  * @property-read int $contentLen
  * @property-read string $bakContent
  */
-class SmartStrPos
+class SmartStrPos extends SmartString
 {
-
-    private $offset = 0;
-    private $trail = 0;
-    private $content = '';
-    private $contentLen = 0;
-    private $bakContent;
-
-    /**
-     * 初始化字符串查找类
-     *
-     * @param string $content   内容
-     * @param integer $offset   开始查找时的起始偏移量
-     */
-    public function __construct(string $content, int $offset = 0)
-    {
-        $this->content = $content;
-        $this->contentLen = mb_strlen($content);
-        $this->bakContent = $this->content;
-        $this->offset = $offset;
-    }
-
-    /**
-     * 重置当前偏移量和尾偏移记录，还原内容
-     *
-     * @return void
-     */
-    public function reset()
-    {
-        $this->offset = 0;
-        $this->trail = 0;
-        $this->content = $this->bakContent;
-    }
-
-    /**
-     * 限制到指定长度内容
-     *
-     * @param int|string $needle    设置内容长度上限，
-     *                              0时为全部；
-     *                              仅整数类型时将截取从0到指定值长度内容；
-     *                              字符串时（包括字符串数字）将查找到该字符串位置，偏移量将不包括该字符串
-     * @return void
-     */
-    public function limit($needle)
-    {
-        if($needle === 0) {
-            $this->content = $this->bakContent;
-            return 0;
-        } elseif(is_int($needle)) {
-            $this->content = mb_substr($this->content, 0, $needle);
-            return $needle;
-        }
-        $limit = mb_strpos($this->content, $needle);
-        $this->content = mb_substr($this->content, 0, $limit);
-        return $limit;
-    }
-
-    public function __call(string $name, $arguments = [])
-    {
-        return $this->iterator($name, $arguments);
-    }
-
-    protected function iterator(string $name, $args)
-    {
-        $class = self::class;
-        if($name[0] != 'g') {
-            throw new Error("Call to undefined method $class::$name()", E_USER_ERROR);
-        }
-        $method = lcfirst(substr($name, 1));
-        $funcList = [
-            'back', 'next', 'nextSub', 'backRange', 'backSub', 'nextPair',
-            'nextPairMatch', 'nextRange', ''
-        ];
-        if(!in_array($method, $funcList)) {
-            throw new Error("Call to undefined method $class::$name()", E_USER_ERROR);
-        }
-        do {
-            $ret = call_user_func_array([$this, $method], $args);
-            if($ret === false) {
-                return $ret;
-            }
-            yield $ret;
-        } while(true);
-    }
-
-    private function trailPos(string $needle)
-    {
-        $this->trail = $this->offset + mb_strlen($needle);
-    }
-
-    /**
-     * 从当前偏移量回退查找第一个出现的$needle
-     *
-     * @param string $needle
-     * @param boolean $move
-     * @return int
-     */
-    public function back(string $needle, bool $move = true)
-    {
-        $coffset = mb_strrpos($this->content, $needle, $this->offset - $this->contentLen);
-        if($coffset !== false && $move) {
-            $this->offset = $coffset;
-            $this->trailPos($needle);
-        }
-        return $coffset;
-    }
-
-    /**
-     * 设置尾偏移量为起始量，尾偏移量位于查看字符串末尾
-     *
-     * @return void
-     */
-    public function trailToOffset()
-    {
-        $this->trail = $this->offset;
-    }
-
-    /**
-     * 从上一次的尾偏移量开始，查找下一个指定字符串
-     * 注：偏移量位于查找字符串开头
-     *
-     * @param string $needle    需要查找的字符串
-     * @param boolean $move     是否移动偏移量，默认移动
-     * @return int              返回偏移量
-     */
-    public function next(string $needle, bool $move = true)
-    {
-        $coffset = mb_strpos($this->content, $needle, $this->trail);
-        if($coffset !== false && $move) {
-            $this->offset = $coffset;
-            $this->trailPos($needle);
-        }
-        return $coffset;
-    }
-
-    /**
-     * 判断当前偏移前方（文件末尾方向）是否紧随给定字符串
-     *
-     * @param string $needle
-     * @param boolean $ignoreEmpty  忽略空白字符，空白字符为 trim() 函数默认的去除的字符
-     * @return bool
-     */
-    public function afterNear(string $needle, $ignoreEmpty = false)
-    {
-        $current = $this->trail;
-        $cur = $this->next($needle, false);
-        if($cur === false) {
-            return false;
-        }
-        if($cur === $current) {
-            return true;
-        }
-        if($ignoreEmpty) {
-            return empty(ltrim(mb_substr($this->content, $current, $cur - $current)));
-        }
-    }
-
-    /**
-     * 检测多个字符串
-     *
-     * @param array $needle
-     * @param boolean $ignoreEmpty
-     * @return bool
-     */
-    public function afterNearMatch(array $needle, $ignoreEmpty = false)
-    {
-        foreach($needle as $n) {
-            if($this->afterNear($n, $ignoreEmpty)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public function beforeNearMatch(array $needle, $ignoreEmpty = false)
-    {
-        foreach($needle as $n) {
-            if($this->beforeNear($n, $ignoreEmpty)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 判断当前偏移后方（文件头方向）是否紧随给定字符串
-     *
-     * @param string $needle
-     * @param boolean $ignoreEmpty  忽略空白字符，空白字符为 ltrim() 函数默认的去除的字符
-     * @return bool
-     */
-    public function beforeNear(string $needle, $ignoreEmpty = false)
-    {
-        $current = $this->offset;
-        $cur = $this->back($needle, false);
-        if($cur === false) {
-            return false;
-        }
-        if($this->trail === $current) {
-            return true;
-        }
-        if($ignoreEmpty) {
-            return empty(ltrim(mb_substr($this->content, $cur, $current - $cur)));
-        }
-    }
-
-    /**
-     * 从上一次的尾偏移量开始，获取下一个子字符串，查找范围不包括起始与结束字符串，
-     *
-     * @param string $start         起始字符串
-     * @param string|null $end      结束字符串
-     * @param boolean $move         是否移动偏移量，偏移量位于开始字符串首
-     * @return string
-     */
-    public function nextSub(string $start, string $end = null, $move = false)
-    {
-        $findPos = 0;
-        if(!$end) {
-            $findPos = $this->next($start);
-            if(false === $findPos) {
-                return false;
-            }
-            $str = $this->sub($findPos + mb_strlen($start));
-        } else {
-            $str = strFind($this->content, $start, $end, $this->trail, $findPos);
-        }
-        if($move && $str) {
-            $this->offset = $findPos;
-            $this->trailPos($str);
-        }
-        return $str;
-    }
-
-    /**
-     * 从当前偏移位置，向后查找第一个$start,然后向前查找到$end处，返回期间字符串
-     *
-     * @param string $start
-     * @param string $end
-     * @param boolean $move
-     * @return string
-     */
-    public function backSub(string $start, string $end, $move = false)
-    {
-        $findPos = 0;
-        $str = strFind($this->content, $start, $end, $this->offset - $this->contentLen, $findPos);
-        if($move && $str) {
-            $this->offset = $findPos;
-            $this->trailPos($str);
-        }
-        return $str;
-    }
-
-    /**
-     * 获取子字符串
-     *
-     * @param int $start
-     * @param int $length
-     * @return string
-     */
-    public function sub($start, $length = null)
-    {
-        if($length === null) {
-            return mb_substr($this->content, $start);
-        }
-        return mb_substr($this->content, $start, $length);
-    }
-
-    /**
-     * 在偏移量后，获取子字符串的SmartStrPos实例
-     *  注：不包括起始与结束字符串
-     * @param string $start     起始字符串
-     * @param string $end       结束字符串
-     * @return SmartStrPos|bool
-     */
-    public function nextRange(string $start, string $end)
-    {
-        $str = $this->nextSub($start, $end, true);
-        if($str) {
-            return self::begin($str);
-        }
-        return false;
-    }
-
-    /**
-     * 在偏移量前，获取子字符串SmartStrPos实例
-     *
-     * @param string $start
-     * @param string $end
-     * @return SmartStrPos|bool
-     */
-    public function backRange(string $start, string $end)
-    {
-        $str = $this->backSub($start, $end, true);
-        if($str) {
-            return self::begin($str);
-        }
-        return false;
-    }
-
-    /**
-     * 多规则字符串查找
-     *
-     * @param string $str           查找字符开头部分
-     * @param array $suffixArr      查找字符串尾列表
-     * @param int $offset           查找偏移
-     * @param int $len              匹配字符串长度
-     * @return int
-     */
-    protected function match($str, $suffixArr, $offset, &$len)
-    {
-        $pos = false;
-        $prepos = mb_strpos($this->content, $str, $offset);
-        if($prepos === false) {
-            return $pos;
-        }
-        foreach($suffixArr as $suffix) {
-            $len = mb_strlen($str . $suffix);
-            $pos = mb_strpos($this->content, $str . $suffix, $offset);
-            if($pos !== false) {
-                break;
-            }
-        }
-        return $pos;
-    }
-
-    /**
-     * 子字符串长度
-     *
-     * @param string $needle
-     * @param boolean $start
-     * @return void
-     */
-    public function count($needle, $start = false)
-    {
-        $offsetContent = $this->content;
-        if($start && $this->offset) {
-            $offsetContent = mb_substr($this->content, $this->offset);
-        }
-        return mb_substr_count($offsetContent, $needle);
-    }
-
-    /**
-     * 在指定字符串后获取子字符串
-     *
-     * @param string $startPairFlag
-     * @param string $startPair
-     * @param string $endPair
-     * @return SmartStrPos
-     */
-    public function nextPair($startPairFlag, $startPair, $endPair)
-    {
-        return $this->nextPairMatch($startPairFlag, $startPair, null, $endPair, null);
-    }
-
-    /**
-     * 在指定字符串后获取子字符串，多规则查找
-     * 
-     * <code>
-     * $str = new SmartStrPos('123abcd45-123efg45=123higk45');
-     * $str->nextPairMatch('=','123',null, '45', null); // higk
-     * </code>
-     *
-     * @param string $startPairFlag             该字符串后查找
-     * @param string $startPair                 截取起始字符串前缀
-     * @param array|null $startPairSuffix       截取起始字符串后缀列表
-     * @param string $endPair                   截取结束字符串前缀
-     * @param array|null $endPairSuffix         截取结束字符串后缀列表
-     * @return SmartStrPos
-     */
-    public function nextPairMatch(string $startPairFlag, string $startPair, ?array $startPairSuffix, string $endPair, ?array $endPairSuffix)
-    {
-        $startPos = $this->next($startPairFlag);
-
-        if($startPos === false) {
-            return false;
-        }
-        $needleLen = mb_strlen($startPairFlag);
-        $endPosOffset = $pairPosOffset = $this->trail;
-
-        $pairLen = mb_strlen($endPair);
-        $endPairLen = mb_strlen($endPair);
-
-        do {
-            if($endPairSuffix) {
-                $endPos = $this->match($endPair, $endPairSuffix, $endPosOffset, $endPairLen);
-            } else {
-                $endPos = mb_strpos($this->content, $endPair, $endPosOffset);
-            }
-
-            if(!$endPos) {
-                return false;
-            }
-            if($startPairSuffix) {
-                $pairPos = $this->match($startPair, $startPairSuffix, $pairPosOffset, $pairLen);
-            } else {
-                $pairPos = mb_strpos($this->content, $startPair, $pairPosOffset);
-            }
-
-            if($pairPos && $pairPos < $endPos) {
-                $str = mb_substr($this->content, $startPos + $needleLen, $endPos - $startPos - $needleLen);
-                $this->offset = $startPos;
-                $this->trail = $endPos + mb_strlen($endPair);
-                return self::begin($str);
-            } elseif($pairPos === $endPos) {
-                throw new RangeException('start and end pair name is ambiguous');
-            }
-            $endPosOffset = $endPos + $endPairLen;
-            $pairPosOffset = $pairPos + $pairLen;
-            if($endPosOffset > $this->contentLen || $pairPosOffset > $this->contentLen) {
-                return false;
-            }
-        } while(true);
-    }
-
-    public function trail()
-    {
-        return $this->trail;
-    }
-
-    public function pos()
-    {
-        return $this->offset;
-    }
-
-    public static function begin(string $content)
-    {
-        return new static($content);
-    }
-
-    public function __get($name)
-    {
-        return $this->$name;
-    }
-
-    public function __toString()
-    {
-        return $this->content;
-    }
-
-    public static function __set_state($properties)
-    {
-        $pos = new static($properties['content'], $properties['offset']);
-        foreach($properties as $name => $v) {
-            $pos->$name = $v;
-        }
-        return $pos;
-    }
-
+    
 }
 
 function smartStrPos(string $content, int $offset = 0)
 {
-    return new SmartStrPos($content, $offset);
+    return new SmartString($content, $offset);
 }
 
 function ffmpegGetMediaMeta($file, $key, $flag)
 {
-    $flags = [
-        'AV_DICT_MATCH_CASE' => 1, 'AV_DICT_IGNORE_SUFFIX' => 2,
-        'AV_DICT_DONT_STRDUP_KEY' => 4, 'AV_DICT_DONT_STRDUP_VAL' => 8,
-        'AV_DICT_DONT_OVERWRITE' => 16, 'AV_DICT_APPEND' => 32, 'AV_DICT_MULTIKEY' => 64
-    ];
-    if(!isset($flags[$flag])) {
-        trigger_error('av dict flags error', E_USER_NOTICE);
-        return false;
-    }
-
-    $cCode = <<<EOF
-    typedef struct AVDictionaryEntry {char *key;char *value;} AVDictionaryEntry;
-    typedef struct AVDictionary {int count;AVDictionaryEntry *elems;} AVDictionary;
-    typedef struct AVIOInterruptCB {int (*callback)(void*); void *opaque;} AVIOInterruptCB;
-    typedef struct AVInputFormat {
-    const char *name;const char *long_name;int flags;const char *extensions;
-    const void *codec_tag;const void *priv_class;
-    const char *mime_type;struct AVInputFormat *next;int raw_codec_id;int priv_data_size;
-    int (*read_probe)(const void *);int (*read_header)(struct AVFormatContext *);
-    int (*read_packet)(struct AVFormatContext *, void *pkt);int (*read_close)(struct AVFormatContext *);
-    int (*read_seek)(struct AVFormatContext *,int stream_index, int64_t timestamp, int flags);
-    int64_t (*read_timestamp)(struct AVFormatContext *s, int stream_index,int64_t *pos, int64_t pos_limit);
-    int (*read_play)(struct AVFormatContext *);int (*read_pause)(struct AVFormatContext *);
-    int (*read_seek2)(struct AVFormatContext *s, int stream_index, int64_t min_ts, int64_t ts, int64_t max_ts, int flags);
-    int (*get_device_list)(struct AVFormatContext *s, struct AVDeviceInfoList *device_list);
-    int (*create_device_capabilities)(struct AVFormatContext *s, struct AVDeviceCapabilitiesQuery *caps);
-    int (*free_device_capabilities)(struct AVFormatContext *s, struct AVDeviceCapabilitiesQuery *caps);
-    } AVInputFormat;
-    typedef int (*av_format_control_message)(struct AVFormatContext *s, int type,
-                                         void *data, size_t data_size);
-    typedef struct AVFormatContext {
-    const void *av_class;struct AVInputFormat *iformat;void *oformat;void *priv_data;
-    void *pb;int ctx_flags;unsigned int nb_streams;void **streams;char *url;int64_t start_time;
-    int64_t duration;int64_t bit_rate;unsigned int packet_size;int max_delay;int flags;int64_t probesize;
-    int64_t max_analyze_duration;const uint8_t *key;int keylen;unsigned int nb_programs;
-    void **programs;int video_codec_id;int audio_codec_id;int subtitle_codec_id;
-    unsigned int max_index_size;unsigned int max_picture_buffer;unsigned int nb_chapters;
-    void **chapters;AVDictionary *metadata;int64_t start_time_realtime;int fps_probe_size;
-    int error_recognition;AVIOInterruptCB interrupt_callback;int debug;int64_t max_interleave_delta;
-    int event_flags;int max_ts_probe;int avoid_negative_ts;int ts_id;int audio_preload;
-    int max_chunk_duration;int max_chunk_size;int use_wallclock_as_timestamps;int avio_flags;
-    int duration_estimation_method;int64_t skip_initial_bytes;unsigned int correct_ts_overflow;
-    int seek2any;int flush_packets;int probe_score;int format_probesize;char *codec_whitelist;
-    char *format_whitelist;void *internal;int io_repositioned;void *video_codec;void *audio_codec;
-    void *subtitle_codec;void *data_codec;int metadata_header_padding;void *opaque;
-    av_format_control_message control_message_cb;int64_t output_ts_offset;uint8_t *dump_separator;
-    int data_codec_id;char *protocol_whitelist;
-    int (*io_open)(struct AVFormatContext *s, void **pb, const char *url,int flags, AVDictionary **options);
-    void (*io_close)(struct AVFormatContext *s, void *pb);char *protocol_blacklist;
-    int max_streams;int skip_estimate_duration_from_pts; int max_probe_packets;
-    } AVFormatContext;
-    int avformat_open_input(AVFormatContext **ps, const char *url, AVInputFormat *fmt, AVDictionary **options);
-    AVDictionaryEntry *av_dict_get(const AVDictionary *m, const char *key, const AVDictionaryEntry *prev, int flags);
-    void avformat_close_input(AVFormatContext **ps);
-    EOF;
-
-    $ffi = FFI::cdef($cCode, '/usr/share/code/libffmpeg.so');
-    $fmtCtx = FFI::addr($ffi->new('AVFormatContext', false, true));
-    $tag = FFI::addr($ffi->new('AVDictionaryEntry'));
-
-    $ffi->avformat_open_input(FFI::addr($fmtCtx), $file, NULL, NULL);
-    $ret = [];
-    if(empty($key)) {
-        $key = '';
-        while(($tag = $ffi->av_dict_get($fmtCtx->metadata, $key, $tag, $flags[$flag]))) {
-            var_dump($tag);
-            $key = FFI::string($tag->key);
-            $tagValue = FFI::string($tag->value);
-            $ret[$key] = $tagValue;
-        }
-    } else {
-        $tag = $ffi->av_dict_get($fmtCtx->metadata, '', $tag, $flags[$flag]);
-        $key = FFI::string($tag->key);
-        $tagValue = FFI::string($tag->value);
-        $ret[$key] = $tagValue;
-    }
-    $ffi->avformat_close_input(FFI::addr($fmtCtx));
-    return $ret;
+    return Video::ffmpegGetMediaMeta($file, $key, $flag);
 }
 
 function getVideoMeta($file): array
 {
-    $command = "ffmpeg -hide_banner -i '$file' 2>&1";
-    $output = [];
-    exec($command, $output, $returnVar);
-    exec("mplayer -nolirc -vo null -ao null -frames 0 -identify '$file' 2>&1", $output, $returnVar);
-    if($returnVar > 0) {
-        trigger_error('use mplayer get video meta error');
-        return [];
-    }
-    $meta = arrayFindFieldValue($output, [
-        'major_brand',
-        'minor_version',
-        'compatible_brands',
-        'encoder',
-        'handler_name',
-        'Duration',
-        'Stream #0',
-        'ID_VIDEO_BITRATE',
-        'ID_AUDIO_BITRATE',
-        'ID_SEEKABLE',
-        'ID_VIDEO_FPS',
-        'ID_VIDEO_WIDTH',
-        'ID_VIDEO_HEIGHT'
-    ]);
-    $videoInfoArr = explode(',', $meta['Stream #0'][0]);
-    $sarWH = [0, 0];
-    $sarValue = 0;
-    foreach($videoInfoArr as $vinfo) {
-        if(($idx = strpos($vinfo, 'Video:')) !== false) {
-            list($codename) = explode(' ', trim(substr($vinfo, $idx)), 2);
-        } elseif(strpos($vinfo, '[SAR') !== false) {
-            $size = explode(' ', trim($vinfo));
-            $sarWH = explode(':', $size[2]);
-            $sarValue = round($sarWH[0] / $sarWH[1], 6);
-        }
-    }
-    $pixfmt = trim($videoInfoArr[1]);
-    $audioInfo = explode(',', $meta['Stream #0'][1]);
-    foreach($audioInfo as $ainfo) {
-        if(($idx = strpos($ainfo, 'Audio:')) !== false) {
-            list($acodename) = explode(' ', trim(substr($ainfo, $idx)), 2);
-        } elseif(strpos($ainfo, 'Hz') !== false) {
-            list($hz) = explode(' ', trim($ainfo), 2);
-        }
-    }
-    $return = [];
-    $durationInfo = explode(',', $meta['Duration']);
-    $return['time'] = trim($durationInfo[0]);
-    $return['width'] = $meta['ID_VIDEO_WIDTH'];
-    $return['height'] = $meta['ID_VIDEO_HEIGHT'];
-    $return['fps'] = $meta['ID_VIDEO_FPS'];
-    $return['video_bitrate'] = $meta['ID_VIDEO_BITRATE'][0];
-    $return['mjor'] = $meta['major_brand'][0];
-    $return['minor'] = $meta['minor_version'][0];
-    $return['compatible_brands'] = $meta['compatible_brands'][0];
-    $return['encoder'] = $meta['encoder'][0];
-    $return['seekable'] = $meta['ID_SEEKABLE'];
-    $return['video_codename'] = $codename;
-    $return['video_handler_name'] = $meta['handler_name'][0];
-    $return['video_pix_fmt'] = $pixfmt;
-    $return['video_aspect_ratio'] = $sarValue;
-    $return['video_aspect_v'] = $sarWH[0];
-    $return['video_aspect_h'] = $sarWH[1];
-    $return['audio_codename'] = $acodename;
-    $return['audio_rate'] = $hz;
-    $return['audio_fmt'] = $audioInfo[3];
-    $return['audio_handler_name'] = $meta['handler_name'][1];
-    return $return;
+    return Video::getVideoMeta($file);
 }
 
 /**
@@ -699,23 +77,7 @@ function getVideoMeta($file): array
  */
 function arrayFind(array $array, $needle, $equal = true)
 {
-    if(is_array($needle)) {
-        $return = [];
-        foreach($needle as $v) {
-            $return[$v] = arrayFind($array, $v, $equal);
-        }
-        return $return;
-    } else {
-        if($equal) {
-            return array_search($needle, $array);
-        }
-        foreach($array as $idx => $line) {
-            if(strpos($line, $needle) !== false) {
-                return $idx;
-            }
-        }
-    }
-    return false;
+    return ArrayObject::arrayFind($array, $needle, $equal);
 }
 
 /**
@@ -728,39 +90,17 @@ function arrayFind(array $array, $needle, $equal = true)
  */
 function getStrFieldValue(string $str, array $seplist = ['=', ':'], string &$field = '')
 {
-    $line = trim($str);
-    $line = str_replace($seplist, '=', $line);
-    parse_str($line, $result);
-    if($field) {
-        if(isset($result[$field])) {
-            return trim($result[$field]);
-        }
-        return null;
-    } else {
-        $field = trim(key($result));
-        return trim(current($result));
-    }
+    return Char::getStrFieldValue($str, $seplist, $field);
 }
 
 function isPrefix($str, $prefix)
 {
-    $prefix = is_scalar($prefix) ? [$prefix] : $prefix;
-    foreach($prefix as $p) {
-        if(strpos($str, $p) === 0) {
-            return true;
-        }
-    }
-    return false;
+    return Char::isPrefix($str, $prefix);
 }
 
 function hasStr($str, $list = [])
 {
-    foreach($list as $s) {
-        if(strpos($str, $s) >= 0) {
-            return true;
-        }
-    }
-    return false;
+    return Char::hasStr($str, $list);
 }
 
 /**
@@ -772,131 +112,37 @@ function hasStr($str, $list = [])
  */
 function arrayFindFieldValue(array $array, $needle, array $addSep = [], string $parentSep = ':')
 {
-    $sep = ['=', ':'];
-    $sep = array_merge($sep, $addSep);
-    if(is_array($needle)) {
-        $return = [];
-        foreach($needle as $v) {
-            $hasParent = false;
-            $field = $v;
-            if(strpos($v, $parentSep) > 0) {
-                list($parent, $field) = explode($parentSep, $v, 2);
-                $parent = trim($parent);
-                $field = trim($field);
-                $hasParent = true;
-            }
-
-            foreach($array as $n => $line) {
-                if($hasParent) {
-                    $pval = getStrFieldValue($line, [$parentSep], $parent);
-                    if($pval !== null) {
-                        $hasParent = false;
-                    }
-                }
-                if(!$hasParent) {
-                    $val = getStrFieldValue($line, $sep, $field);
-                    if($val !== null) {
-                        if(isset($return[$v])) {
-                            if(!is_array($return[$v])) {
-                                $return[$v] = [$return[$v], $val];
-                            } else {
-                                $return[$v][] = $return[$v];
-                            }
-                        } else {
-                            $return[$v] = $val;
-                        }
-                    }
-                }
-            }
-        }
-        return empty($return) ? null : $return;
-    } else {
-        foreach($array as $line) {
-            $val = getStrFieldValue($line, $sep, $needle);
-            if($val !== null) {
-                return $val;
-            }
-        }
-    }
-    return null;
+    return ArrayObject::arrayFindFieldValue($array, $needle, $addSep, $parentSep);
 }
 
 function getDirFile($path)
 {
-    $d = dir($path);
-    $file = [];
-    while(false !== ($f = $d->read())) {
-        if($f == '.' || $f == '..') {
-            continue;
-        }
-        $file[] = $f;
-    }
-    return $file;
+    return Path::getDirFile($path);
 }
 
 function calThreshold($number, $threshold, $sep = '')
 {
-    $res = [];
-    $int = floor($number);
-    foreach($threshold as $val) {
-        if($int >= $val) {
-            $res[] = floor($int / $val);
-            $int = $int % $val;
-        } else {
-            $res[] = 0;
-        }
-    }
-    $res[] = $int;
-    return strlen($sep) > 0 ? join($sep, $res) : $res;
+    return Video::calThreshold($number, $threshold, $sep);
 }
 
 function getTTYSize()
 {
-    return explode(' ', exec('stty size'));
+    return Console::getTTYSize();
 }
 
 function isFloatNumber($number)
 {
-    if(!is_numeric($number)) {
-        return false;
-    }
-    if(strpos($number, '.')) {
-        return true;
-    }
-    return false;
+    return Scalar::isFloatNumber($number);
 }
 
 function getDecimal($number)
 {
-    if(isFloatNumber($number)) {
-        list(, $decimal) = explode('.', $number);
-        return $decimal;
-    }
-    return 0;
+    return Scalar::getDecimal($number);
 }
 
 function videoTime($time)
 {
-    if(is_numeric($time)) {
-        $res = calThreshold($time, [3600, 60]);
-        array_walk($res, function (&$v) {
-            $v = str_pad($v, 2, 0, STR_PAD_LEFT);
-        });
-        $str = join(':', $res);
-        $res[] = str_pad(getDecimal($time), 3, 0);
-        return $str . ".{$res[3]}";
-    } else {
-        $res = explode(':', $time);
-
-        $len = count($res);
-        if($len >= 3) {
-            $res[0] = $res[0] * 3600;
-            $res[1] = $res[1] * 60;
-        } else {
-            $res[0] = $res[0] * 60;
-        }
-        return array_sum($res);
-    }
+    return Video::videoTime($time);
 }
 
 /**
@@ -913,23 +159,12 @@ function fetch(string $url, $opt = [])
 
 function checkStrSuffix($str, $endStr)
 {
-    $idx = strpos($str, $endStr);
-    if((strlen($str) - $idx) === strlen($endStr)) {
-        return true;
-    }
-    return false;
+    return Char::checkStrSuffix($str, $endStr);
 }
 
 function isUpDomain($subDomain, $upDomain)
 {
-    $subLvl = substr_count($subDomain, '.');
-    $upLvl = substr_count($upDomain, '.');
-    if($upLvl == $subLvl && $subDomain == $upDomain) {
-        return 0;
-    } elseif($upLvl < $subLvl && checkStrSuffix($subDomain, ".$upDomain")) {
-        return 1;
-    }
-    return -1;
+    return Char::isUpDomain($subDomain, $upDomain);
 }
 
 /**
@@ -938,107 +173,9 @@ function isUpDomain($subDomain, $upDomain)
  * @property-read string $error
  * @property-read int $errCode
  */
-class Fetch
+class Fetch extends SimpleCurl
 {
-
-    private string $data = '';
-    private $retCode = 0;
-    private string $error = '';
-    private int $errCode = 0;
-    public static ?string $CURLOPT_USERAGENT = null;
-    public static ?string $CURLOPT_COOKIE = NULL;
-    public static int $CURLOPT_CONNECTTIMEOUT = 10;
-    public static bool $CURLOPT_FOLLOWLOCATION = true;
-    public static int $CURLOPT_MAXREDIRS = 10;
-    public static bool $autoLastReferer = false;
-    public static string $lastUrl = '';
-    public static bool $CURLOPT_DNS_USE_GLOBAL_CACHE = true;
-
-    /**
-     * 是否复用连接
-     *
-     * @var boolean
-     */
-    public static bool $CURL_CONNET_REUSE = true;
-    public static $ch1 = null;
-
-    public function __construct($url, $opt = [])
-    {
-        if(!self::$ch1 || !self::$CURL_CONNET_REUSE) {
-            self::$ch1 = curl_init();
-        }
-
-        $defOpt = [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => self::$CURLOPT_CONNECTTIMEOUT,
-            CURLOPT_URL => $url,
-            CURLOPT_AUTOREFERER => true,
-            CURLOPT_FOLLOWLOCATION => self::$CURLOPT_FOLLOWLOCATION,
-            CURLOPT_MAXREDIRS => self::$CURLOPT_MAXREDIRS,
-            CURLOPT_DNS_USE_GLOBAL_CACHE => self::$CURLOPT_DNS_USE_GLOBAL_CACHE,
-        ];
-        if(self::$autoLastReferer) {
-            $defOpt[CURLOPT_REFERER] = self::$lastUrl;
-        }
-
-        self::$lastUrl = $url;
-        if(isset($opt[CURLOPT_URL])) {
-            self::$lastUrl = $opt[CURLOPT_URL];
-        }
-
-        if(self::$CURLOPT_USERAGENT !== null) {
-            $defOpt[CURLOPT_USERAGENT] = self::$CURLOPT_USERAGENT;
-        }
-        if(self::$CURLOPT_COOKIE !== null) {
-            if(is_array(self::$CURLOPT_COOKIE)) {
-                $host = parse_url($url, PHP_URL_HOST);
-                foreach(self::$CURLOPT_COOKIE as $cookeDomain => $cookie) {
-                    if(isUpDomain($host, $cookeDomain) >= 0) {
-                        $defOpt[CURLOPT_COOKIE] = $cookie;
-                    }
-                }
-            } else {
-                $defOpt[CURLOPT_COOKIE] = self::$CURLOPT_COOKIE;
-            }
-        }
-        foreach($opt as $key => $val) {
-            $defOpt[$key] = $val;
-        }
-        curl_setopt_array(self::$ch1, $defOpt);
-        $this->data = curl_exec(self::$ch1);
-        $this->retCode = curl_getinfo(self::$ch1, CURLINFO_HTTP_CODE);
-        $this->errCode = curl_errno(self::$ch1);
-        $this->error = curl_error(self::$ch1);
-        if(!self::$CURL_CONNET_REUSE) {
-            curl_close(self::$ch1);
-        }
-    }
-
-    public function getError()
-    {
-        return $this->error;
-    }
-
-    public function errorCode()
-    {
-        return $this->errCode;
-    }
-
-    public function returnCode()
-    {
-        return $this->retCode;
-    }
-
-    public function __get($name)
-    {
-        return $this->$name;
-    }
-
-    public function __toString()
-    {
-        return (string) $this->data;
-    }
-
+    
 }
 
 /**
@@ -1051,38 +188,7 @@ class Fetch
  */
 function wget(string $url, string $output, $opt = [])
 {
-    $defOpt = [
-        '-w' => 5,
-        '-T' => 5,
-        '-t' => 1,
-        '-q',
-        '-O' => $output,
-    ];
-    $url = escapeshellarg($url);
-    if(isset($_ENV['WGET_USER_AGENT'])) {
-        $defOpt['--user-agent'] = $_ENV['WGET_USER_AGENT'];
-    }
-    foreach($opt as $k => $v) {
-        $defOpt[$k] = $v;
-    }
-    $option = '';
-    foreach($defOpt as $k => $v) {
-        $v = escapeshellarg($v);
-        if(is_numeric($k)) {
-            $option .= " $v";
-        } elseif(strlen($k) > 2) {
-            $option .= " $k=$v";
-        } else {
-            $option .= " $k $v";
-        }
-    }
-    $returnVar = 0;
-    passthru("wget $option $url", $returnVar);
-    if(file_exists($output) && !filesize($output) && $returnVar) {
-        trigger_error("wget has error and file($output) size is 0, Removed!", E_USER_WARNING);
-        unlink($output);
-    }
-    return $returnVar;
+    return Console::wget($url, $output, $opt);
 }
 
 /**
@@ -1093,23 +199,12 @@ function wget(string $url, string $output, $opt = [])
  */
 function clearTTYLine($selfWidth = null)
 {
-    static $ttywidth;
-    if(!$ttywidth && !$selfWidth) {
-        list(, $ttywidth) = getTTYSize();
-    } elseif($selfWidth) {
-        $ttywidth = $selfWidth;
-    }
-    echo "\r" . str_repeat(' ', $ttywidth);
+    return Console::clearTTYLine($selfWidth);
 }
 
 function strCountNumerOfLetter($str, $isnum)
 {
-    $letter = $isnum ? range(0, 9) : range('A', 'Z');
-    $count = 0;
-    foreach($letter as $num) {
-        $count += mb_substr_count($str, $num);
-    }
-    return $count;
+    return Char::strCountNumerOfLetter($str, $isnum);
 }
 
 /**
@@ -1122,32 +217,17 @@ function strCountNumerOfLetter($str, $isnum)
  */
 function saveArray($file, $array, $option = 0)
 {
-    if($option & FILE_APPEND) {
-        $var = '$_ARRAY';
-        if(!file_exists($file) || $option & FILE_NEW_APPEND) {
-            $var = "<?php $var = [];" . PHP_EOL . $var;
-        }
-        return file_put_contents($file, "{$var}[] = " . var_export($array, true) . ';' . PHP_EOL, $option);
-    }
-    file_put_contents($file, '<?php return ' . var_export($array, true) . ';', $option);
+    return File::saveArray($file, $array, $option);
 }
 
 function pathJoin(...$args)
 {
-    $root = '';
-    if(strpos($args[0], DIRECTORY_SEPARATOR) === 0) {
-        $root = DIRECTORY_SEPARATOR;
-    }
-    array_walk($args, function (&$v) {
-        $v = trim($v, '\\/ ');
-    });
-
-    return $root . join(DIRECTORY_SEPARATOR, $args);
+    return Path::join(...$args);
 }
 
 function rPathJoin(...$args)
 {
-    return realpath(call_user_func_array('pathJoin', $args));
+    return Path::realpath(Path::join(...$args));
 }
 
 /**
@@ -1163,16 +243,7 @@ function rPathJoin(...$args)
  */
 function rloopArray(array &$array, callable $callback, $userdata = null)
 {
-    foreach($array as $k => &$v) {
-        $res = $callback($v, $k, $userdata);
-        if($res !== null) {
-            return $res;
-        }
-        if(is_array($v) && ($res = rloopArray($v, $callback, $userdata)) !== null) {
-            return $res;
-        }
-    }
-    return null;
+    return ArrayObject::rloopArray($array, $callback, $userdata);
 }
 
 /**
@@ -1185,86 +256,17 @@ function rloopArray(array &$array, callable $callback, $userdata = null)
  */
 function findTree(array $array, $value)
 {
-    $treePath = [];
-    foreach($array as $k => $v) {
-        if($v === $value || (is_callable($value) && $value($v, $k) === 0)) {
-            $treePath[] = $k;
-            return $treePath;
-        } elseif(is_array($v)) {
-            $subTree = findTree($v, $value);
-            if(!empty($subTree)) {
-                array_unshift($subTree, $k);
-                return $subTree;
-            }
-        }
-    }
-    return $treePath;
+    return ArrayObject::findTree($array, $value);
 }
 
 function strEndPos($str, $needle)
 {
-    return mb_strrpos($str, $needle) == (mb_strlen($str) - mb_strlen($needle));
+    return Char::strEndPos($str, $needle);
 }
 
-class Csv
+class Csv extends CsvFile
 {
-
-    public static int $lineLength = 0;
-    public static string $delimiter = ',';
-    public static string $enclosure = '"';
-    public static string $escape = '\\';
-    private $fp = null;
-
-    public function __construct(string $file)
-    {
-        $this->fp = fopen($file, 'rb');
-    }
-
-    public function read()
-    {
-        if($this->isEnd()) {
-            return false;
-        }
-        return fgetcsv($this->fp, self::$lineLength, self::$delimiter, self::$enclosure, self::$escape);
-    }
-
-    public function readAll()
-    {
-        $this->reset();
-        $ret = [];
-        while(false !== ($line = $this->read())) {
-            $ret[] = $line;
-        }
-        return $ret;
-    }
-
-    public function reset()
-    {
-        fseek($this->fp, 0, SEEK_SET);
-    }
-
-    public function xRead()
-    {
-        while(false !== ($line = $this->read())) {
-            yield $line;
-        }
-    }
-
-    public function isEnd()
-    {
-        return feof($this->fp);
-    }
-
-    public function close()
-    {
-        fclose($this->fp);
-    }
-
-    public function __destruct()
-    {
-        $this->close();
-    }
-
+    
 }
 
 /**
@@ -1278,19 +280,5 @@ class Csv
  */
 function multitaskProgress($cur, $total, $totalTaskNum, $taskIdx)
 {
-    $tabSize = 8;
-    list(, $ttywidth) = getTTYSize();
-    $tabNum = floor($ttywidth / $totalTaskNum / $tabSize);
-    $fn = $cur / $total * 100;
-    $p = 100 / ($tabSize * $tabNum);
-    $maskNum = floor($fn / $p);
-    $mask = str_repeat('=', $maskNum);
-    $mod = $fn % $p;
-    if($mod >= $p / 2 && $mod < $p) {
-        $mask .= '-';
-    }
-    if($maskNum < ($totalTaskNum - 1)) {
-        $mask .= ($cur % 2 == 0 ? '\\' : '/');
-    }
-    echo str_repeat("\t", $taskIdx * $tabNum) . $mask . "\r";
+    return Console::multitaskProgress($cur, $total, $totalTaskNum, $taskIdx);
 }

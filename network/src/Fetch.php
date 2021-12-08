@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Toknot (http://toknot.com)
  *
@@ -13,86 +14,105 @@ use Toknot\Path\PathExistsException;
 
 class Fetch
 {
-    protected static $curlAvailable = false;
-    protected static $curlSafeOpt   = false;
 
-    protected $returnRaw             = true;
-    protected $cookie                = '';
-    protected $agent                 = false;
-    protected $url                   = '';
-    protected $referer               = '';
-    protected $user                  = '';
-    protected $pwd                   = '';
-    protected $port                  = 0;
-    protected $autoFollow            = true;
-    protected $maxRedirs             = 10;
-    protected $curlOtherOpt          = [];
-    protected $responseHeader        = [];
+    protected static $curlAvailable = false;
+    protected static $curlSafeOpt = false;
+    protected $returnRaw = true;
+    protected $cookie = '';
+    protected $url = '';
+    protected $referer = '';
+    protected $user = '';
+    protected $pwd = '';
+    protected $port = 0;
+    protected $curlOtherOpt = [];
+    protected $responseHeader = [];
     protected $disableHeaderCallback = false;
-    protected $headerCallback        = null;
-    protected $lastErrno             = 0;
-    protected $lastError             = '';
-    public function __construct($url)
+    protected $headerCallback = null;
+    protected $lastErrno = 0;
+    protected $lastError = '';
+    private $connectId = null;
+    public static ?string $CURLOPT_USERAGENT = null;
+    public static ?string $CURLOPT_COOKIE = NULL;
+    public static int $CURLOPT_CONNECTTIMEOUT = 10;
+    public static bool $CURLOPT_FOLLOWLOCATION = true;
+    public static int $CURLOPT_MAXREDIRS = 10;
+    public static bool $autoLastReferer = false;
+    public static string $lastUrl = '';
+    public static bool $CURLOPT_DNS_USE_GLOBAL_CACHE = true;
+
+    /**
+     * 是否复用连接
+     *
+     * @var boolean
+     */
+    public static bool $CURL_CONNET_REUSE = true;
+    public static $ch1 = [];
+
+    public function __construct($url, $id = null)
     {
         $this->url = $url;
+        $this->connectId = $id ?? mt_rand();
         $this->checkCURL();
     }
 
     protected function checkCURL()
     {
-        if (!self::$curlAvailable) {
-            if (\extension_loaded('curl')) {
+        if(!self::$curlAvailable) {
+            if(\extension_loaded('curl')) {
                 self::$curlAvailable = true;
             }
         }
-        if (self::$curlAvailable && !self::$curlSafeOpt && defined('CURLOPT_SAFE_UPLOAD')) {
+        if(self::$curlAvailable && !self::$curlSafeOpt && defined('CURLOPT_SAFE_UPLOAD')) {
             self::$curlSafeOpt = true;
         }
     }
 
     protected function open($op)
     {
-        if (self::$curlAvailable) {
-            $ch = \curl_init($this->url);
-            \curl_setopt_array($ch, $op);
-            $res             = \curl_exec($ch);
-            $this->lastErrno = \curl_errno($ch);
-            $this->lastError = \curl_error($ch);
-            \curl_close($ch);
+        if(self::$curlAvailable) {
+            if(!self::$CURL_CONNET_REUSE && isset($this->ch1[$this->connectId])) {
+                $this->ch1[$this->connectId] = \curl_init($this->url);
+            }
+            \curl_setopt_array($this->ch1[$this->connectId], $op);
+            $res = \curl_exec($this->ch1[$this->connectId]);
+            $this->lastErrno = \curl_errno($this->ch1[$this->connectId]);
+            $this->lastError = \curl_error($this->ch1[$this->connectId]);
+            if(!self::$CURL_CONNET_REUSE) {
+                \curl_close($ch);
+            }
             return $res;
         } else {
             $cxt = \stream_context_create($opt);
             $res = \file_get_contents($url, $cxt);
-            if (!$this->disableHeaderCallback) {
+            if(!$this->disableHeaderCallback) {
                 $this->responseHeader = \get_headers();
             }
             return $res;
         }
-
     }
 
     protected function setPHPStramOpt()
     {
         $op = ['http' => ['header' => '']];
-        if ($this->cookie) {
-            if (\is_array($this->cookie)) {
+        if($this->cookie) {
+            if(\is_array($this->cookie)) {
                 $cookie = \http_build_query($this->cookie, '', ';');
-            } elseif (is_file($this->cookie)) {
+            } elseif(is_file($this->cookie)) {
                 $cookie = \file_get_contents($this->cookie);
             }
             $cookie = trim($cookie, "\r\n");
             $op['http']['header'] .= "Cookie: $cookie\r\n";
         }
-        if ($this->referer) {
+        if($this->referer) {
             $op['http']['header'] .= "Referer: {$this->referer}\r\n";
         }
-        if ($this->autoFollow) {
+        if($this->autoFollow) {
             $op['http']['follow_location'] = 1;
-            $op['http']['max_redirects']   = $this->maxRedirs;
+            $op['http']['max_redirects'] = $this->maxRedirs;
         } else {
             $op['http']['follow_location'] = 0;
         }
-        if ($this->agent) {
+        if($this->agent) {
             $op['http']['user_agent'] = $agent;
         }
 
@@ -101,37 +121,39 @@ class Fetch
 
     protected function setCurlOpt()
     {
-        $op = [];
-        if (\is_array($this->cooke)) {
-            $cookieStr          = http_build_query($this->cooke, '', ';');
+        $op = [
+            CURLOPT_CONNECTTIMEOUT => self::$CURLOPT_CONNECTTIMEOUT,
+            CURLOPT_AUTOREFERER => true,
+            CURLOPT_FOLLOWLOCATION => self::$CURLOPT_FOLLOWLOCATION,
+            CURLOPT_MAXREDIRS => self::$CURLOPT_MAXREDIRS,
+            CURLOPT_DNS_USE_GLOBAL_CACHE => self::$CURLOPT_DNS_USE_GLOBAL_CACHE,
+        ];
+        if(\is_array($this->cooke)) {
+            $cookieStr = http_build_query($this->cooke, '', ';');
             $op[CURLOPT_COOKIE] = $cookieStr;
-        } elseif ($this->cookie && is_file($this->cooke)) {
+        } elseif($this->cookie && is_file($this->cooke)) {
             $op[CURLOPT_COOKIEFILE] = $this->cooke;
         }
-        if ($this->returnRaw) {
+        if($this->returnRaw) {
             $op[CURLOPT_RETURNTRANSFER] = true;
         }
-        if ($this->agent) {
-            $op[CURLOPT_USERAGENT] = $this->agent;
+        if(self::$CURLOPT_USERAGENT !== null) {
+            $op[CURLOPT_USERAGENT] = self::$CURLOPT_USERAGENT;
         }
-        if ($this->referer) {
+        if($this->referer) {
             $op[CURLOPT_REFERER] = $this->referer;
         }
-        if ($this->user) {
+        if($this->user) {
             $op[CURLOPT_USERPWD] = "{$this->user}:{$this->pwd}";
         }
-        if ($this->port) {
+        if($this->port) {
             $op[CURLOPT_PORT] = $this->port;
         }
-        $op[CURLOPT_AUTOREFERER] = true;
-        if ($this->autoFollow) {
-            $op[CURLOPT_FOLLOWLOCATION] = true;
-            $op[CURLOPT_MAXREDIRS]      = $this->maxRedirs;
-        }
-        if (!$this->disableHeaderCallback) {
+
+        if(!$this->disableHeaderCallback) {
             $op[CURLOPT_HEADERFUNCTION] = $this->headerFunction();
         }
-        foreach ($this->curlOtherOpt as $k => $v) {
+        foreach($this->curlOtherOpt as $k => $v) {
             $op[$k] = $v;
         }
         return $op;
@@ -139,7 +161,7 @@ class Fetch
 
     protected function setOpt()
     {
-        if (!self::$curlAvailable) {
+        if(!self::$curlAvailable) {
             return $this->setPHPStramOpt();
         } else {
             return $this->setCurlOpt();
@@ -156,7 +178,7 @@ class Fetch
     {
         return function ($ch, $header) {
             $this->responseHeader[] = $header;
-            if ($this->headerCallback) {
+            if($this->headerCallback) {
                 $func = $this->headerCallback;
                 $func($ch, $header);
             }
@@ -166,13 +188,13 @@ class Fetch
 
     protected function upload($file, &$op)
     {
-        if (\is_null($file)) {
+        if(\is_null($file)) {
             return [];
         }
-        if (is_array($file)) {
+        if(is_array($file)) {
             $op = [];
-            foreach ($file as $key => $file) {
-                if (\is_file($file)) {
+            foreach($file as $key => $file) {
+                if(\is_file($file)) {
                     $op[$key] = new CURLFile($file);
                 }
             }
@@ -218,7 +240,7 @@ class Fetch
     public function setUser($user, $pwd = null)
     {
         $this->user = $user;
-        if ($pwd) {
+        if($pwd) {
             $this->pwd = $pwd;
         }
         return $this;
@@ -232,23 +254,25 @@ class Fetch
 
     public function setPort($port)
     {
-        if (!\is_numeric($port)) {
+        if(!\is_numeric($port)) {
             throw \InvalidArgumentException("host port only numeric");
-        } elseif ($port < 1 || $port > 65535) {
+        } elseif($port < 1 || $port > 65535) {
             throw \OutOfRangeException("host port must between 1 - 65535");
         }
         $this->port = $port;
         return $this;
     }
+
     public function curlOpt($opt, $value = null)
     {
-        if (\is_array($opt)) {
+        if(\is_array($opt)) {
             $this->curlOtherOpt = $opt;
         } else {
             $this->curlOtherOpt[$opt] = $value;
         }
         return $this;
     }
+
     public function outputContet()
     {
         $this->returnRaw = false;
@@ -269,7 +293,7 @@ class Fetch
     public function get()
     {
         $op = $this->setOpt();
-        if (self::$curlAvailable) {
+        if(self::$curlAvailable) {
             $op[CURLOPT_HTTPGET] = true;
         } else {
             $op['http']['method'] = 'GET';
@@ -308,28 +332,28 @@ class Fetch
      */
     public function post($data, array $file = [], $form = true)
     {
-        if (!\is_scalar($data) && !\is_array($data)) {
+        if(!\is_scalar($data) && !\is_array($data)) {
             throw new \InvalidArgumentException('paramter #1 must be string or array');
         }
         $op = $this->setOpt();
-        if (self::$curlAvailable) {
+        if(self::$curlAvailable) {
             $op[CURLOPT_POST] = 1;
-            if ($form && is_array($data) && $file) {
-                if (self::$curlSafeOpt) {
+            if($form && is_array($data) && $file) {
+                if(self::$curlSafeOpt) {
                     $op[CURLOPT_SAFE_UPLOAD] = true;
                 }
-                $fileopt                = $this->upload($file, $data);
+                $fileopt = $this->upload($file, $data);
                 $op[CURLOPT_POSTFIELDS] = $data;
-            } elseif ($form && \is_array($data)) {
+            } elseif($form && \is_array($data)) {
                 $op[CURLOPT_POSTFIELDS] = \http_build_query($data);
             } else {
                 $op[CURLOPT_POSTFIELDS] = $data;
             }
         } else {
-            if ($file) {
+            if($file) {
                 throw new \RuntimeException("php stream mode not support post file");
             }
-            $op['http']['method']  = 'POST';
+            $op['http']['method'] = 'POST';
             $op['http']['content'] = is_array($data) ? \http_build_query($data) : $data;
         }
         return $this->open($op);
@@ -348,12 +372,12 @@ class Fetch
         if(!self::$curlAvailable) {
             throw new \RuntimeException('\Toknot\Network\Fetch::download() method need curl');
         }
-        if (!$override && \file_exists($file)) {
+        if(!$override && \file_exists($file)) {
             throw new PathExistsException("$file is exists");
         }
-        $fp                         = \fopen($file, 'w+');
-        $op                         = $this->setOpt();
-        $op[CURLOPT_FILE]           = $fp;
+        $fp = \fopen($file, 'w+');
+        $op = $this->setOpt();
+        $op[CURLOPT_FILE] = $fp;
         $op[CURLOPT_RETURNTRANSFER] = false;
         return $this->open($op);
     }

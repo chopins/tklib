@@ -23,7 +23,15 @@ class Path
      */
     public static function join(...$paths)
     {
-        return DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $paths);
+        $root = '';
+        if(strpos($args[0], DIRECTORY_SEPARATOR) === 0) {
+            $root = DIRECTORY_SEPARATOR;
+        }
+        array_walk($args, function (&$v) {
+            $v = trim($v, '\\/ ');
+        });
+
+        return $root . join(DIRECTORY_SEPARATOR, $args);
     }
 
     /**
@@ -227,6 +235,19 @@ class Path
     {
         $trace = debug_backtrace(0, 1);
         return dirname($trace[0]['file']);
+    }
+
+    public static function getDirFile($path)
+    {
+        $d = dir($path);
+        $file = [];
+        while(false !== ($f = $d->read())) {
+            if($f == '.' || $f == '..') {
+                continue;
+            }
+            $file[] = $f;
+        }
+        return $file;
     }
 
 }

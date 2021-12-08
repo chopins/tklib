@@ -10,19 +10,44 @@
 
 namespace Toknot\Type;
 
-class Scalar {
+class Scalar
+{
+
     protected $value = '';
-    public function __toString() {
+
+    public function __toString()
+    {
         return $this->value;
     }
-    
+
     public function getValue()
     {
         return $this->value;
     }
-    
+
     public function __get($name)
     {
         return $this->$name;
     }
+
+    public static function isFloatNumber($number)
+    {
+        if(!is_numeric($number)) {
+            return false;
+        }
+        if(strpos($number, '.')) {
+            return true;
+        }
+        return false;
+    }
+
+    public static function getDecimal($number)
+    {
+        if(isFloatNumber($number)) {
+            list(, $decimal) = explode('.', $number);
+            return $decimal;
+        }
+        return 0;
+    }
+
 }
