@@ -193,4 +193,20 @@ class ArrayObject extends \ArrayObject
         return $treePath;
     }
 
+    public static function numberChunk($total, $chunkNum)
+    {
+        $unitNum = floor($total / $chunkNum);
+        $unitArr = [[]];
+        $k = $unitArrIdx = 0;
+        for($i = 0; $i < $total; $i++) {
+            if($k >= $unitNum) {
+                $k = 0;
+                $unitArrIdx++;
+            }
+            $unitArr[$unitArrIdx][] = $i;
+            $k++;
+        }
+        return $unitArr;
+    }
+
 }

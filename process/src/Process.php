@@ -61,6 +61,11 @@ class Process
         $this->argv = CommandInput::instance();
     }
 
+    public function __get($name)
+    {
+        return $this->$name;
+    }
+
     public static function loadProcessExtension($shmIpc = false)
     {
         dl('pcntl.' . PHP_SHLIB_SUFFIX);
@@ -667,9 +672,12 @@ class Process
      * </code>
      *
      * @param int $number   if the number equal 0 is child process,  like fork() return
+     * @param $callable     child process will call function
+     * @param $forkEndCallable      after all child process forked, pass $mainId and  $this
+     * @param $loopCallable      main process loop call, pass $mainId and  $this
      * @return int
      */
-    public function multiProcess($number, $callable = null, $mainCallable = null)
+    public function multiProcess($number, $callable = null, $forkEndCallable = null, $loopCalllable = null)
     {
 
         $mainSockPoolId = uniqid(__FUNCTION__);
@@ -678,10 +686,14 @@ class Process
         if(!$this->initMutiProcess($number, $mainSockPoolId, $callable)) {
             return 0;
         }
-        if($mainCallable) {
-            $mainCallable();
+        if($forkEndCallable) {
+            try {
+                $forkEndCallable($mainSockPoolId, $this);
+            } catch(\Exception|\Error $e) {
+                echo $e;
+            }
         }
-        $this->processLoop($mainSockPoolId);
+        $this->processLoop($mainSockPoolId, null, $loopCalllable);
         $this->wait();
         $this->destoryShm($mainSockPoolId);
         return 1;
@@ -734,7 +746,7 @@ class Process
         return stream_select($read, $write, $except, 0, $tv_usec);
     }
 
-    private function processLoop($mainId, $callable = null)
+    private function processLoop($mainId, $callable = null, $loopCallable = null)
     {
         while(count($this->myChildProcess[$mainId])) {
             $write = $except = [];
@@ -748,6 +760,13 @@ class Process
                 $pid = $this->poolCall($mainId, $rs, $callable);
                 if($pid === 0) {
                     return 0;
+                }
+            }
+            if($loopCallable) {
+                try {
+                    $loopCallable($mainId, $this);
+                } catch(\Exception | \Error $e) {
+                    echo $e;
                 }
             }
             usleep(self::$SLEEP_USEC);

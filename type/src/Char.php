@@ -17,9 +17,9 @@ class Char extends Scalar
 
     const NAME = 'string';
 
-    public function __construct($int = '')
+    public function __construct($str = '')
     {
-        $this->value = (string) $int;
+        $this->value = (string) $str;
     }
 
     public function find($start, $end, $offset, &$findPos = 0)
@@ -151,5 +151,8 @@ class Char extends Scalar
     {
         return mb_strrpos($str, $needle) == (mb_strlen($str) - mb_strlen($needle));
     }
-
+    public function __call($name, $argv)
+    {
+        return $name($this->value, ...$argv);
+    }
 }

@@ -29,7 +29,7 @@ class ShareMemory
     private $permissions = 0600;
     private $blocks = [];
     private $lastValue = [];
-    public $enableJson = true;
+    private $varSize = 1;
 
     /**
      * key default store path
@@ -52,14 +52,15 @@ class ShareMemory
      * 
      * @parma string $shmName
      * @param string $project    a one character
+     * @param int    $varSize       value fixed size
      * @throws RuntimeException
      */
-    public function __construct($shmName, string $project, $size = null, int $permissions = 0600)
+    public function __construct($shmName, string $project, $varSize, $size = null, int $permissions = 0600)
     {
         if(strlen($project) != 1) {
             throw new RuntimeException('project name only a one character');
         }
-
+        $this->varSize = $size;
         $this->permissions = $permissions;
         $this->setSize($size);
         $this->project = $project;
@@ -72,7 +73,6 @@ class ShareMemory
         } elseif(!is_dir($this->workspace)) {
             throw new RuntimeException("$this->workspace is not directory");
         }
-        $this->enableJson = function_exists('json_encode');
         $this->attach($shmName);
     }
 
@@ -82,22 +82,6 @@ class ShareMemory
         return $location . '/' . self::$PHP_SHARE_MEMORY_KEY_SPACE;
     }
 
-    protected function encode($v)
-    {
-        if($this->enableJson) {
-            return json_encode($v);
-        }
-        return serialize($v);
-    }
-
-    protected function decode($v)
-    {
-        if($this->enableJson) {
-            return json_decode($v, true);
-        }
-        return unserialize($v);
-    }
-
     public function hasChange($varName)
     {
         $key = $this->varKey($varName);
@@ -105,7 +89,6 @@ class ShareMemory
             return false;
         }
         $v = shm_get_var($this->shm, $key);
-        $v = $this->decode($v);
         if(empty($v[1]) || $v[1] > $this->lastValue[$key]) {
             return true;
         }
@@ -129,13 +112,23 @@ class ShareMemory
         return ftok($file, $this->project);
     }
 
+    /**
+     * chunk head size 8byte + sizeof(zend_long) * 4
+     * 
+     * @param int $size
+     * @throws \RuntimeException
+     */
     protected function setSize($size)
     {
         if($size) {
-            $this->size = Byte::toByte($size) * 8;
+            $this->size = Byte::toByte($size);
         } else {
             $iniVar = ini_get('sysvshm.init_mem');
             $this->size = empty($iniVar) ? 10000 : $iniVar;
+        }
+        $shmhead = 8 + PHP_INT_SIZE * 4;
+        if($this->size < 8 + $shmhead) {
+            throw new \RuntimeException("share memory must greater then $shmhead");
         }
     }
 
@@ -166,8 +159,27 @@ class ShareMemory
         $this->unConnect();
         $ret = shm_remove($this->shm);
         Path::rmdir($this->projectSpace, true);
-        
+
         return $ret;
+    }
+
+    public static function assessShmSize($varNum, $varMaxLen)
+    {
+        $hs = 8 + PHP_INT_SIZE * 4;
+        $len = $varMaxLen + strlen(serialize(['', self::lastTime()]));
+        $c1 = $len + (3 * PHP_INT_SIZE);
+        $c2 = (int) ($c1 / PHP_INT_SIZE);
+        $c3 = ($c2 + 1) * PHP_INT_SIZE + PHP_INT_SIZE;
+        return $c3 * $varNum + $hs;
+    }
+
+    public static function assessVarSize($var)
+    {
+        $sv = serialize([$var, self::lastTime()]);
+        $len = strlen($sv);
+        $c1 = $len + (3 * PHP_INT_SIZE);
+        $c2 = (int) ($c1 / PHP_INT_SIZE);
+        return $c2+1 * PHP_INT_SIZE + PHP_INT_SIZE;
     }
 
     public function setBlocking($varName, bool $enable)
@@ -189,13 +201,12 @@ class ShareMemory
                 continue;
             }
             $v = shm_get_var($this->shm, $key);
-            $v = $this->decode($v);
             if(empty($this->lastValue[$key]) || empty($this->blocks[$key]) || $v[1] > $this->lastValue[$key]) {
-                return $v[0];
+                return trim($v[0]);
             }
             usleep(100000);
         } while(!empty($this->blocks[$key]));
-        return $v[0];
+        return trim($v[0]);
     }
 
     public function has($varname)
@@ -204,7 +215,7 @@ class ShareMemory
         return shm_has_var($this->shm, $key);
     }
 
-    private function lastTime()
+    private static function lastTime()
     {
         if(PHP_VERSION_ID > 70300) {
             $hrtime = hrtime();
@@ -216,11 +227,11 @@ class ShareMemory
     public function put($varname, $value)
     {
         $key = $this->varKey($varname);
-        $lt = $this->lastTime();
-        $value = $this->encode([$value, $lt]);
-        if(strlen($value) > $this->size) {
-            throw new RuntimeException("put value length big than $this->size");
+        $lt = self::lastTime();
+        if(strlen($value) < $this->varSize) {
+            $value = str_pad($value, $this->varSize);
         }
+        $value = [$value, $lt];
         $ret = shm_put_var($this->shm, $key, $value);
         if($ret) {
             $this->lastValue[$key] = $lt;
@@ -254,7 +265,6 @@ class ShareMemory
                 $shm = shm_attach($key, null);
                 $r = shm_remove($shm);
                 rmdir($dir);
-                
             }, true);
     }
 
