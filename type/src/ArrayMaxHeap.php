@@ -12,6 +12,7 @@ namespace Toknot\Type;
 
 /**
  * MaxHeap
+ * Node is Array
  *
  * @author chopin
  */
