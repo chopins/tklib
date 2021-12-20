@@ -14,6 +14,14 @@ namespace Toknot\Type;
  * SmartString
  *
  * @author chopin
+ * @method int gBack(string $needle, bool $move)    see back()
+ * @method int gNext(string $needle, bool $move)    see next()
+ * @method int gNextSub(string $start, string $end, bool $move)     see nextSub()
+ * @method SmartString|bool gBackRange()    see backRange()
+ * @methodd string gBackSub(string $start, string $end)  see backSub()
+ * @method SmartString gNextPair($startPairFlag, $startPair, $endPair) see nextPair()
+ * @method SmartString gNextPairMatch(string $startPairFlag, string $startPair, ?array $startPairSuffix, string $endPair, ?array $endPairSuffix)        see nextPairMatch()
+ * @method SmartString gNextRange(string $start, string $end)  see nextRange()
  */
 class SmartString
 {
@@ -73,11 +81,24 @@ class SmartString
         return $limit;
     }
 
+    /**
+     * 
+     * @param string $name
+     * @param array $arguments
+     * @return \Generator
+     */
     public function __call(string $name, $arguments = [])
     {
         return $this->iterator($name, $arguments);
     }
 
+    /**
+     * 
+     * @param string $name
+     * @param array $args
+     * @return \Generator
+     * @throws Error
+     */
     protected function iterator(string $name, $args)
     {
         $class = self::class;
@@ -87,7 +108,7 @@ class SmartString
         $method = lcfirst(substr($name, 1));
         $funcList = [
             'back', 'next', 'nextSub', 'backRange', 'backSub', 'nextPair',
-            'nextPairMatch', 'nextRange', ''
+            'nextPairMatch', 'nextRange'
         ];
         if(!in_array($method, $funcList)) {
             throw new Error("Call to undefined method $class::$name()", E_USER_ERROR);
@@ -284,11 +305,11 @@ class SmartString
     }
 
     /**
-     * 在偏移量后，获取子字符串的SmartStrPos实例
+     * 在偏移量后，获取子字符串的SmartString实例
      *  注：不包括起始与结束字符串
      * @param string $start     起始字符串
      * @param string $end       结束字符串
-     * @return SmartStrPos|bool
+     * @return SmartString|bool
      */
     public function nextRange(string $start, string $end)
     {
@@ -300,11 +321,11 @@ class SmartString
     }
 
     /**
-     * 在偏移量前，获取子字符串SmartStrPos实例
+     * 在偏移量前，获取子字符串SmartString实例
      *
      * @param string $start
      * @param string $end
-     * @return SmartStrPos|bool
+     * @return SmartString|bool
      */
     public function backRange(string $start, string $end)
     {
@@ -363,7 +384,7 @@ class SmartString
      * @param string $startPairFlag
      * @param string $startPair
      * @param string $endPair
-     * @return SmartStrPos
+     * @return SmartString
      */
     public function nextPair($startPairFlag, $startPair, $endPair)
     {
@@ -374,7 +395,7 @@ class SmartString
      * 在指定字符串后获取子字符串，多规则查找
      * 
      * <code>
-     * $str = new SmartStrPos('123abcd45-123efg45=123higk45');
+     * $str = new SmartString('123abcd45-123efg45=123higk45');
      * $str->nextPairMatch('=','123',null, '45', null); // higk
      * </code>
      *
@@ -383,7 +404,7 @@ class SmartString
      * @param array|null $startPairSuffix       截取起始字符串后缀列表
      * @param string $endPair                   截取结束字符串前缀
      * @param array|null $endPairSuffix         截取结束字符串后缀列表
-     * @return SmartStrPos
+     * @return SmartString
      */
     public function nextPairMatch(string $startPairFlag, string $startPair, ?array $startPairSuffix, string $endPair, ?array $endPairSuffix)
     {

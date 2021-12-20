@@ -18,6 +18,27 @@ namespace Toknot\Process;
 class Console
 {
 
+    const STYLE_BLOD = 1;
+    const STYLE_UNDERLINE = 2;
+    const STYLE_BLINK = 4;
+    const STYLE_FB_SWAP = 8;
+    const STYLE_COLOR_BLACK = 16;
+    const STYLE_COLOR_RED = 32;
+    const STYLE_COLOR_GREEN = 64;
+    const STYLE_COLOR_YELLOW = 128;
+    const STYLE_COLOR_BLUE = 256;
+    const STYLE_COLOR_PURPLE = 512;
+    const STYLE_COLOR_TEAL = 1024;
+    const STYLE_COLOR_WHITE = 2048;
+    const STYLE_BG_COLOR_BLACK = 1 << 12;
+    const STYLE_BG_COLOR_RED = 2 << 12;
+    const STYLE_BG_COLOR_GREEN = 4 << 12;
+    const STYLE_BG_COLOR_YELLOW = 8 << 12;
+    const STYLE_BG_COLOR_BLUE = 16 << 12;
+    const STYLE_BG_COLOR_PURPLE = 32 << 12;
+    const STYLE_BG_COLOR_TEAL = 64 << 12;
+    const STYLE_BG_COLOR_WHITE = 128 << 12;
+
     /**
      * 清理命令行
      *
@@ -110,6 +131,52 @@ class Console
             $mask .= ($cur % 2 == 0 ? '\\' : '/');
         }
         echo str_repeat("\t", $taskIdx * $tabNum) . $mask . "\r";
+    }
+
+    public static function tab($num)
+    {
+        return str_repeat("\t", $num);
+    }
+
+    /**
+     * only support ANSI escape code/sequence terminal available
+     * 
+     * @param int $line
+     */
+    public static function backLine($line)
+    {
+        return "\033[{$line}A";
+    }
+
+    public static function colorString($string, int $style = 0)
+    {
+        $map = [self::STYLE_BLOD => 1,
+            self::STYLE_UNDERLINE => 4,
+            self::STYLE_BLINK => 5,
+            self::STYLE_FB_SWAP => 7,
+            self::STYLE_COLOR_BLACK => 30,
+            self::STYLE_COLOR_RED => 31,
+            self::STYLE_COLOR_GREEN => 32,
+            self::STYLE_COLOR_YELLOW => 33,
+            self::STYLE_COLOR_BLUE => 34,
+            self::STYLE_COLOR_PURPLE => 35,
+            self::STYLE_COLOR_TEAL => 36,
+            self::STYLE_COLOR_WHITE => 37,
+            self::STYLE_BG_COLOR_BLACK => 40,
+            self::STYLE_BG_COLOR_RED => 41,
+            self::STYLE_BG_COLOR_GREEN => 42,
+            self::STYLE_BG_COLOR_YELLOW => 43,
+            self::STYLE_BG_COLOR_BLUE => 44,
+            self::STYLE_BG_COLOR_PURPLE => 45,
+            self::STYLE_BG_COLOR_TEAL => 46,
+            self::STYLE_BG_COLOR_WHITE => 47];
+        $setVar = [];
+        foreach($map as $k => $v) {
+            if($style & $k) {
+                $setVar[] = $v;
+            }
+        }
+        return "\033[" . implode(',', $setVar) . "m$string\033[0m";
     }
 
 }

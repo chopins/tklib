@@ -11,6 +11,7 @@
 namespace Toknot\Type;
 
 use Toknot\Type\Scalar;
+use RuntimeException;
 
 class Char extends Scalar
 {
@@ -151,8 +152,10 @@ class Char extends Scalar
     {
         return mb_strrpos($str, $needle) == (mb_strlen($str) - mb_strlen($needle));
     }
+
     public function __call($name, $argv)
     {
         return $name($this->value, ...$argv);
     }
+
 }

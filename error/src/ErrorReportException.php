@@ -12,7 +12,7 @@ namespace Toknot\Error;
 
 class ErrorReportException extends \RuntimeException
 {
-    public function __construct($msg, $code, $file, $line)
+    public function __construct($msg = '', $code = 0, $file = '', $line = 0)
     {
         $this->file = $file;
         $this->line = $line;

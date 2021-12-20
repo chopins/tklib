@@ -675,7 +675,7 @@ class Process
      * @param $callable     child process will call function
      * @param $forkEndCallable      after all child process forked, pass $mainId and  $this
      * @param $loopCallable      main process loop call, pass $mainId and  $this
-     * @return int
+     * @return int      返回0时，表示当前为子进程，1时为父进程
      */
     public function multiProcess($number, $callable = null, $forkEndCallable = null, $loopCalllable = null)
     {

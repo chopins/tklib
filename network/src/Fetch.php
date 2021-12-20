@@ -17,6 +17,7 @@ class Fetch
 
     protected static $curlAvailable = false;
     protected static $curlSafeOpt = false;
+    protected $cooke = [];
     protected $returnRaw = true;
     protected $cookie = '';
     protected $url = '';
@@ -51,7 +52,7 @@ class Fetch
     public function __construct($url, $id = null)
     {
         $this->url = $url;
-        $this->connectId = $id ?? mt_rand();
+        $this->connectId = $id ?? parse_url($url, PHP_URL_HOST);
         $this->checkCURL();
     }
 
@@ -70,15 +71,16 @@ class Fetch
     protected function open($op)
     {
         if(self::$curlAvailable) {
-            if(!self::$CURL_CONNET_REUSE && isset($this->ch1[$this->connectId])) {
-                $this->ch1[$this->connectId] = \curl_init($this->url);
+            if(!self::$CURL_CONNET_REUSE || !isset(self::$ch1[$this->connectId])) {
+                self::$ch1[$this->connectId] = \curl_init();
             }
-            \curl_setopt_array($this->ch1[$this->connectId], $op);
-            $res = \curl_exec($this->ch1[$this->connectId]);
-            $this->lastErrno = \curl_errno($this->ch1[$this->connectId]);
-            $this->lastError = \curl_error($this->ch1[$this->connectId]);
+            $op[CURLOPT_URL] = $this->url;
+            \curl_setopt_array(self::$ch1[$this->connectId], $op);
+            $res = \curl_exec(self::$ch1[$this->connectId]);
+            $this->lastErrno = \curl_errno(self::$ch1[$this->connectId]);
+            $this->lastError = \curl_error(self::$ch1[$this->connectId]);
             if(!self::$CURL_CONNET_REUSE) {
-                \curl_close($ch);
+                \curl_close(self::$ch1);
             }
             return $res;
         } else {
@@ -91,7 +93,7 @@ class Fetch
         }
     }
 
-    protected function setPHPStramOpt()
+    protected function setPHPStreamOpt()
     {
         $op = ['http' => ['header' => '']];
         if($this->cookie) {
@@ -162,7 +164,7 @@ class Fetch
     protected function setOpt()
     {
         if(!self::$curlAvailable) {
-            return $this->setPHPStramOpt();
+            return $this->setPHPStreamOpt();
         } else {
             return $this->setCurlOpt();
         }
@@ -379,7 +381,9 @@ class Fetch
         $op = $this->setOpt();
         $op[CURLOPT_FILE] = $fp;
         $op[CURLOPT_RETURNTRANSFER] = false;
-        return $this->open($op);
+        $re = $this->open($op);
+        fclose($fp);
+        return $re;
     }
 
 }
