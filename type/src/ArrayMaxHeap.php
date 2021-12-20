@@ -19,6 +19,12 @@ class ArrayMaxHeap extends \SplMaxHeap
 {
 
     protected $compareKey = 0;
+    
+    public function __construct($key)
+    {
+        parent::__construct();
+        $this->setCompareKey($key);
+    }
 
     public function setCompareKey($key)
     {

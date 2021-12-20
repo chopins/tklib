@@ -73,6 +73,12 @@ class Interval
     const SET_COMPLEX = 'C';
     const SETS_ALL = [self::SET_N_ZAHLEN, self::SET_P_ZAHLEN, self::SET_ZAHLEN, self::SET_NATURAL, self::SET_RATIONAL];
 
+    /**
+     * 
+     * @param string|array $range   数学区间，多个区间使用数组
+     * @param string $set
+     * @throws TypeError
+     */
     public function __construct(string|array $range = '', $set = self::SET_RATIONAL)
     {
         if(!in_array($set, self::SETS_ALL)) {
@@ -86,22 +92,22 @@ class Interval
 
     public function addLOpen($l, $r)
     {
-        $this->add($l, $r, '(', ']');
+        $this->add($l, $r, self::SYMBOL[0], self::SYMBOL[3]);
     }
 
     public function addROpen($l, $r)
     {
-        $this->add($l, $r, '[', ')');
+        $this->add($l, $r, self::SYMBOL[1], self::SYMBOL[2]);
     }
 
     public function addOpen($l, $r)
     {
-        $this->add($l, $r, '(', ')');
+        $this->add($l, $r, self::SYMBOL[0], self::SYMBOL[2]);
     }
 
     public function addClose($l, $r)
     {
-        $this->add($l, $r, '[', ']');
+        $this->add($l, $r, self::SYMBOL[1], self::SYMBOL[3]);
     }
 
     public function inNumberSet($value)
@@ -140,13 +146,13 @@ class Interval
             return false;
         }
         foreach($this->ranges as $set) {
-            if($set[2] == '(' && $set[0] != self::L_INFINITAS && $value <= $set[0]) {
+            if($set[2] == self::SYMBOL[0] && $set[0] != self::L_INFINITAS && $value <= $set[0]) {
                 continue;
-            } else if($set[2] == '[' && $set[0] != self::L_INFINITAS && $value < $set[0]) {
+            } else if($set[2] == self::SYMBOL[1] && $set[0] != self::L_INFINITAS && $value < $set[0]) {
                 continue;
-            } else if($set[3] == ']' && $set[1] != self::R_INFINITAS && $value > $set[1]) {
+            } else if($set[3] == self::SYMBOL[3] && $set[1] != self::R_INFINITAS && $value > $set[1]) {
                 continue;
-            } else if($set[3] == ')' && $set[1] != self::R_INFINITAS && $value >= $set[1]) {
+            } else if($set[3] == self::SYMBOL[2] && $set[1] != self::R_INFINITAS && $value >= $set[1]) {
                 continue;
             }
             return true;
@@ -154,28 +160,34 @@ class Interval
         return false;
     }
 
-    protected function parse($range)
+    protected function parse($rDef)
     {
-        if(is_array($range)) {
-            foreach($range as $r) {
+        if(is_array($rDef)) {
+            foreach($rDef as $r) {
                 $this->parse($r);
             }
         } else {
-            $len = strlen($range);
-            $end = $range[$len - 1];
-            if(!in_array($range[0], self::SYMBOL) || !in_array($end, self::SYMBOL)) {
+            $len = strlen($rDef);
+            $end = $rDef[$len - 1];
+            if(!in_array($rDef[0], self::SYMBOL) || !in_array($end, self::SYMBOL)) {
                 throw new TypeError('Iterval farmat error');
             }
-            $range = [];
-            $range = str_replace('_', '', $range);
-            list($range[0], $range[1]) = explode(',', substr($range, 1, -1));
+
+            $rDef = str_replace('_', '', $rDef);
+            $range = explode(',', substr($rDef, 1, -1));
             if(isset($range[2]) || (!is_numeric($range[0]) && $range[0] != self::L_INFINITAS) || (!is_numeric($range[1]) && $range[1] != self::R_INFINITAS)) {
                 throw new TypeError('Iterval farmat error');
             }
-            $range[2] = $range[0];
-            $range[3] = $$end;
+            $range[2] = $rDef[0];
+            $range[3] = $end;
+            $this->ranges[] = $range;
         }
-        $this->ranges[] = $range;
+    }
+
+    public static function numIn($num, $range, $set = self::SET_RATIONAL)
+    {
+        $obj = new static($range, $set);
+        return $obj->in($num);
     }
 
 }
