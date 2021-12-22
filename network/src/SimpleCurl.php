@@ -10,7 +10,7 @@
 
 namespace Toknot\Network;
 
-use Toknot\Type\Char;
+use Toknot\Type\Text;
 
 /**
  * SimpleCurl
@@ -71,7 +71,7 @@ class SimpleCurl
             if(is_array(self::$CURLOPT_COOKIE)) {
                 $host = parse_url($url, PHP_URL_HOST);
                 foreach(self::$CURLOPT_COOKIE as $cookeDomain => $cookie) {
-                    if(Char::isUpDomain($host, $cookeDomain) >= 0) {
+                    if(Text::isUpDomain($host, $cookeDomain) >= 0) {
                         $defOpt[CURLOPT_COOKIE] = $cookie;
                     }
                 }

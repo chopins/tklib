@@ -39,6 +39,8 @@ class Console
     const STYLE_BG_COLOR_TEAL = 64 << 12;
     const STYLE_BG_COLOR_WHITE = 128 << 12;
 
+    public static $ESCAPE_CODE = "\033";
+
     /**
      * 清理命令行
      *
@@ -49,7 +51,7 @@ class Console
     {
         static $ttywidth;
         if(!$ttywidth && !$selfWidth) {
-            list(, $ttywidth) = getTTYSize();
+            list(, $ttywidth) = self::getTTYSize();
         } elseif($selfWidth) {
             $ttywidth = $selfWidth;
         }
@@ -117,7 +119,7 @@ class Console
     public static function multitaskProgress($cur, $total, $totalTaskNum, $taskIdx)
     {
         $tabSize = 8;
-        list(, $ttywidth) = getTTYSize();
+        list(, $ttywidth) = self::getTTYSize();
         $tabNum = floor($ttywidth / $totalTaskNum / $tabSize);
         $fn = $cur / $total * 100;
         $p = 100 / ($tabSize * $tabNum);
@@ -133,6 +135,11 @@ class Console
         echo str_repeat("\t", $taskIdx * $tabNum) . $mask . "\r";
     }
 
+    /**
+     * 
+     * @param int $num
+     * @return string
+     */
     public static function tab($num)
     {
         return str_repeat("\t", $num);
@@ -142,13 +149,74 @@ class Console
      * only support ANSI escape code/sequence terminal available
      * 
      * @param int $line
+     * @return string
      */
-    public static function backLine($line)
+    public static function cursorUp($line)
     {
-        return "\033[{$line}A";
+        return self::$ESCAPE_CODE . "[{$line}A";
     }
 
-    public static function colorString($string, int $style = 0)
+    public static function cursorDown($line)
+    {
+        return self::$ESCAPE_CODE . "[{$line}B";
+    }
+
+    public static function cursorRight($num)
+    {
+        return self::$ESCAPE_CODE . "[{$num}C";
+    }
+
+    public static function cursorLeft($num)
+    {
+        return self::$ESCAPE_CODE . "[{$num}D";
+    }
+
+    public static function saveCursorPos()
+    {
+        echo self::$ESCAPE_CODE . '[s';
+    }
+
+    public static function restoreCursorPos()
+    {
+        echo self::$ESCAPE_CODE . '[u';
+    }
+
+    public static function multiLinePrint($total, $line, $msg)
+    {
+        if($line == 1) {
+            echo PHP_EOL;
+            echo self::cursorUp($total);
+        }
+        $v = str_repeat("\v", $line - 1);
+        echo "$v\r$msg";
+    }
+
+    public static function indentPrint(int $part, string $msg, $total = 1, $pIdx = 0)
+    {
+        static $partMsg = [];
+        list(, $ttywidth) = self::getTTYSize();
+        echo "\r";
+        $wtab = floor(floor($ttywidth / 8) / $total);
+        echo self::tab($wtab * $pIdx);
+        $partMsg[$part] = $msg;
+        ksort($partMsg);
+        $preTab = 0;
+        foreach($partMsg as $k => $m) {
+            if($k === $part) {
+                break;
+            }
+            $preTab += ceil(strlen($m)/8);
+        }
+        echo self::tab($preTab) . $msg;
+    }
+
+    /**
+     * 
+     * @param string $string
+     * @param int $style
+     * @return string
+     */
+    public static function colorString($string, int $style)
     {
         $map = [self::STYLE_BLOD => 1,
             self::STYLE_UNDERLINE => 4,
@@ -169,14 +237,14 @@ class Console
             self::STYLE_BG_COLOR_BLUE => 44,
             self::STYLE_BG_COLOR_PURPLE => 45,
             self::STYLE_BG_COLOR_TEAL => 46,
-            self::STYLE_BG_COLOR_WHITE => 47];
+            self::STYLE_BG_COLOR_WHITE => 47,];
         $setVar = [];
         foreach($map as $k => $v) {
             if($style & $k) {
                 $setVar[] = $v;
             }
         }
-        return "\033[" . implode(',', $setVar) . "m$string\033[0m";
+        return self::$ESCAPE_CODE . "[" . implode(';', $setVar) . "m$string" . self::$ESCAPE_CODE . "[0m";
     }
 
 }

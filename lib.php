@@ -3,7 +3,7 @@
 defined('HAVE_TKLIB_AUTOLOAD_' . md5(__DIR__ . '/autoload.php')) || die('must be include ' . __DIR__ . '/autoload.php');
 
 use Toknot\Type\Scalar;
-use Toknot\Type\Char;
+use Toknot\Type\Text;
 use Toknot\Path\Path;
 use Toknot\Type\ArrayObject;
 use Toknot\Path\File;
@@ -39,7 +39,7 @@ function sortBySubVal(array &$arr, $subKey, $sortFlag = SORT_REGULAR, $reverse =
  */
 function strFind(string $content, $start, $end, $offset, &$findPos = 0)
 {
-    return Char::strFind($content, $start, $end, $offset, $findPos);
+    return Text::strFind($content, $start, $end, $offset, $findPos);
 }
 
 /**
@@ -92,17 +92,17 @@ function arrayFind(array $array, $needle, $equal = true)
  */
 function getStrFieldValue(string $str, array $seplist = ['=', ':'], string &$field = '')
 {
-    return Char::getStrFieldValue($str, $seplist, $field);
+    return Text::getStrFieldValue($str, $seplist, $field);
 }
 
 function isPrefix($str, $prefix)
 {
-    return Char::isPrefix($str, $prefix);
+    return Text::isPrefix($str, $prefix);
 }
 
 function hasStr($str, $list = [])
 {
-    return Char::hasStr($str, $list);
+    return Text::hasStr($str, $list);
 }
 
 /**
@@ -161,12 +161,12 @@ function fetch(string $url, $opt = [])
 
 function checkStrSuffix($str, $endStr)
 {
-    return Char::checkStrSuffix($str, $endStr);
+    return Text::checkStrSuffix($str, $endStr);
 }
 
 function isUpDomain($subDomain, $upDomain)
 {
-    return Char::isUpDomain($subDomain, $upDomain);
+    return Text::isUpDomain($subDomain, $upDomain);
 }
 
 /**
@@ -206,7 +206,7 @@ function clearTTYLine($selfWidth = null)
 
 function strCountNumerOfLetter($str, $isnum)
 {
-    return Char::strCountNumerOfLetter($str, $isnum);
+    return Text::strCountNumerOfLetter($str, $isnum);
 }
 
 /**
@@ -263,7 +263,7 @@ function findTree(array $array, $value)
 
 function strEndPos($str, $needle)
 {
-    return Char::strEndPos($str, $needle);
+    return Text::strEndPos($str, $needle);
 }
 
 class Csv extends CsvFile

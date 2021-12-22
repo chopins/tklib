@@ -26,6 +26,7 @@ class Process
     private $shm = [];
     protected $mainSockPool = [];
     protected $childSock = null;
+    protected $isQuit = false;
     protected $scheduleTable = [];
     protected $myChildProcess = [];
     protected $argv = [];
@@ -58,6 +59,7 @@ class Process
         if($shmIpc && !extension_loaded('sysvshm')) {
             throw new \RuntimeException('sysvshm extension un-loaded');
         }
+        $this->isQuit = false;
         $this->argv = CommandInput::instance();
     }
 
@@ -105,6 +107,9 @@ class Process
 
     public function quit($pipe = null)
     {
+        if($this->isQuit) {
+            return;
+        }
         $pipe = $pipe ? $pipe : $this->childSock;
         $this->setBlocking($pipe, 1);
         $pid = $this->getpid();
@@ -113,6 +118,7 @@ class Process
         if(is_resource($pipe)) {
             fclose($pipe);
         }
+        $this->isQuit = true;
         return $res;
     }
 
@@ -614,7 +620,7 @@ class Process
      * @param int $number
      * @param resource $mport
      * @param resource $cport
-     * @return boolean|int
+     * @return mixed
      */
     protected function initMutiProcess($number, $mainId, $callable = null)
     {
@@ -628,6 +634,7 @@ class Process
                 }
             }
         }
+        $this->isQuit = false;
         $channelSize = $number * 30;
         for($i = 0; $i < $number; $i++) {
             list($this->mainSockPool[$mainId][$i], $cport) = $this->ipcChannel($mainId, $channelSize);
@@ -639,7 +646,6 @@ class Process
             } else {
                 $this->sockpid($mainId, $cport);
                 $this->setBlocking($cport, 1);
-
                 $waitStatus = $this->waitMain($cport);
                 if(is_callable($callable)) {
                     return call_user_func($callable);
@@ -654,7 +660,7 @@ class Process
             $this->send($s, self::CMD_ALREADY);
         }
 
-        return true;
+        return $this;
     }
 
     /**
@@ -675,7 +681,7 @@ class Process
      * @param $callable     child process will call function
      * @param $forkEndCallable      after all child process forked, pass $mainId and  $this
      * @param $loopCallable      main process loop call, pass $mainId and  $this
-     * @return int      返回0时，表示当前为子进程，1时为父进程
+     * @return mixed      返回$this时，为父进程,其他值为位于子进程的回调返回值
      */
     public function multiProcess($number, $callable = null, $forkEndCallable = null, $loopCalllable = null)
     {
@@ -683,8 +689,9 @@ class Process
         $mainSockPoolId = uniqid(__FUNCTION__);
         $this->mainSockPool[$mainSockPoolId] = [];
         $this->parentPid = $this->getpid();
-        if(!$this->initMutiProcess($number, $mainSockPoolId, $callable)) {
-            return 0;
+        $initRes = $this->initMutiProcess($number, $mainSockPoolId, $callable);
+        if($initRes !== $this) {
+            return $initRes;
         }
         if($forkEndCallable) {
             try {
@@ -696,7 +703,7 @@ class Process
         $this->processLoop($mainSockPoolId, null, $loopCalllable);
         $this->wait();
         $this->destoryShm($mainSockPoolId);
-        return 1;
+        return $this;
     }
 
     protected function poolCall($mainId, $mport, $callable = null)
