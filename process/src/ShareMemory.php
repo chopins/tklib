@@ -10,6 +10,7 @@
 
 namespace Toknot\Process;
 
+use RuntimeException;
 use Toknot\Math\Byte;
 use Toknot\Path\Path;
 
@@ -29,7 +30,6 @@ class ShareMemory
     private $permissions = 0600;
     private $blocks = [];
     private $lastValue = [];
-    private $varSize = 1;
 
     /**
      * key default store path
@@ -55,12 +55,11 @@ class ShareMemory
      * @param int    $varSize       value fixed size
      * @throws RuntimeException
      */
-    public function __construct($shmName, string $project, $varSize, $size = null, int $permissions = 0600)
+    public function __construct($shmName, string $project, $size = null, int $permissions = 0600)
     {
         if(strlen($project) != 1) {
             throw new RuntimeException('project name only a one character');
         }
-        $this->varSize = $size;
         $this->permissions = $permissions;
         $this->setSize($size);
         $this->project = $project;
@@ -68,8 +67,9 @@ class ShareMemory
         $this->workspace = self::getWorkspace();
 
         if(!file_exists($this->workspace)) {
-            mkdir($this->workspace, $this->permissions, true);
-            chmod($this->workspace, $this->permissions | 0700);
+            if(@mkdir($this->workspace, $this->permissions, true)) {
+                @chmod($this->workspace, $this->permissions | 0700);
+            }
         } elseif(!is_dir($this->workspace)) {
             throw new RuntimeException("$this->workspace is not directory");
         }
@@ -105,6 +105,9 @@ class ShareMemory
     protected function varKey(string $name)
     {
         $this->unConnect();
+        if(!is_dir($this->projectSpace)) {
+            throw new \RuntimeException("Project Space $this->projectSpace not exists");
+        }
         $file = $this->projectSpace . '/' . $name;
         if(!touch($file)) {
             throw new \RuntimeException("touch $file error");
@@ -141,6 +144,9 @@ class ShareMemory
             chmod($this->projectSpace, $this->permissions | 0700);
         } elseif(!is_dir($this->projectSpace)) {
             throw new RuntimeException("$this->projectSpace is not directory");
+        }
+        if(!is_dir($this->projectSpace)) {
+            throw new RuntimeException("Project space $this->projectSpace create error");
         }
 
         $key = ftok($this->projectSpace, $this->project);
@@ -228,9 +234,6 @@ class ShareMemory
     {
         $key = $this->varKey($varname);
         $lt = self::lastTime();
-        if(strlen($value) < $this->varSize) {
-            $value = str_pad($value, $this->varSize);
-        }
         $value = [$value, $lt];
         $ret = shm_put_var($this->shm, $key, $value);
         if($ret) {
@@ -252,7 +255,7 @@ class ShareMemory
     {
         $workspace = self::getWorkspace();
         if(!is_dir($workspace)) {
-            throw new RuntimeException("share memory workspace not exists");
+            return;
         }
         Path::dirWalk($workspace, function ($path) {
             unlink($path);

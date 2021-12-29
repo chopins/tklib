@@ -40,6 +40,7 @@ class Console
     const STYLE_BG_COLOR_WHITE = 128 << 12;
 
     public static $ESCAPE_CODE = "\033";
+    public static $lastTime = 0;
 
     /**
      * 清理命令行
@@ -205,7 +206,7 @@ class Console
             if($k === $part) {
                 break;
             }
-            $preTab += ceil(strlen($m)/8);
+            $preTab += ceil(strlen($m) / 8);
         }
         echo self::tab($preTab) . $msg;
     }
@@ -245,6 +246,14 @@ class Console
             }
         }
         return self::$ESCAPE_CODE . "[" . implode(';', $setVar) . "m$string" . self::$ESCAPE_CODE . "[0m";
+    }
+
+    public static function debugHrtime($flag)
+    {
+        $ct = hrtime(true);
+        $t = round(($ct - self::$lastTime)/1000000000, 4);
+        echo "[$flag] CT:" . $ct . ' - UT:' . $t . PHP_EOL;
+        self::$lastTime = $ct;
     }
 
 }

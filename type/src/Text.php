@@ -10,27 +10,28 @@
 
 namespace Toknot\Type;
 
-use Toknot\Type\Scalar;
+use Toknot\Type\TextStaticAbstract;
+use Toknot\Type\ReflectionFunction;
 use RuntimeException;
+use InvalidArgumentException;
 
-class Text extends Scalar implements \Iterator, \ArrayAccess
+class Text extends TextStaticAbstract implements \ArrayAccess
 {
 
     const NAME = 'string';
 
-    protected $offset = 0;
-    private static $mbEnable = null;
-    public static $noMbstr = false;
+    protected $wordSplitOffset = 0;
     protected $objNoMbstr = false;
+    protected array $splitWordArray = [];
+    protected int $splitWordOffset = 0;
     protected static $cacheFunc = [];
-    protected static $standardFuncCache = [];
 
     public function __construct(string $str = '', bool $noMbstr = false)
     {
         $this->value = (string) $str;
-        if($noMbstr) {
+        if ($noMbstr) {
             $this->objNoMbstr = false;
-        } elseif(self::$mbEnable === null) {
+        } elseif (self::$mbEnable === null) {
             $this->objNoMbstr = extension_loaded('mbstring');
             self::$mbEnable = $this->objNoMbstr;
         } else {
@@ -38,15 +39,9 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
         }
     }
 
-    public static function checkMbstring()
+    public static function fromFile($file)
     {
-        if(self::$noMbstr) {
-            self::$mbEnable = false;
-        }
-        if(self::$mbEnable !== null) {
-            return;
-        }
-        self::$mbEnable = extension_loaded('mbstring');
+        return new static(file_get_contents($file));
     }
 
     public function find($start, $end, $offset, &$findPos = 0)
@@ -64,109 +59,69 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
         return self::isPrefix($this->value, $prefix);
     }
 
-    public function __callStatic($name, $argv)
-    {
-        self::checkMbstring();
-        $func = self::mayFuncName($name, self::$mbEnable);
-        return $func(...$argv);
-    }
-
     public function __call($name, $argv)
     {
-        $func = self::mayFuncName($name, $this->objNoMbstr);
-        $realArg = $this->internalStrFuncCallOrder($func, $argv);
+        $func = parent::mayStringFuncName($name, $this->objNoMbstr);
+        $realArg = $this->internalStrFuncObjCallOrder($func, $argv);
         return $func(...$realArg);
     }
 
-    protected function undefinedMethod($name)
+    protected function internalStrFuncObjCallOrder($func, $argv)
     {
-        $class = __CLASS__;
-        throw new BadMethodCallException("Undefined $class::$name()");
-    }
-
-    protected function internalStrFuncCallOrder($func, $argv)
-    {
-        if(isset(self::$cacheFunc[$func])) {
-            if(self::$cacheFunc[$func] < 0) {
+        if (isset(self::$cacheFunc[$func])) {
+            if (self::$cacheFunc[$func] < 0) {
                 $this->undefinedMethod($func);
             }
             $realArg = [];
-            $realArg[self::$cacheFunc[$func]] = $this->value;
-            $k = 0;
-            foreach($argv as $i => $v) {
-                if(!isset($realArg[$i])) {
-                    $realArg[$k] = $v;
-                } else {
-                    $k++;
+            if(self::$cacheFunc[$func] == 0) {
+                array_unshift($argv, $this->value);
+                return $argv;
+            }
+            foreach ($argv as $i => $v) {
+                if ($i === self::$cacheFunc[$func]) {
+                    $realArg[] = $this->value;
                 }
-                $k++;
+                $realArg[] = $v;
             }
             return $realArg;
         }
-        $ref = new \ReflectionFunction($func);
-        if(!$ref->isInternal()) {
+        $ref = new ReflectionFunction($func);
+        if (!$ref->isInternal()) {
             self::$cacheFunc[$func] = -1;
             $this->undefinedMethod($func);
         }
 
-        $vn = ['subject', 'string', 'str', 'haystack'];
         $findStr = $inserted = false;
-        $realArgv = [];
-        $k = 0;
-        foreach($ref->getParameters() as $i => $p) {
-            $name = $p->getName();
-            $type = $p->getType();
-            if(in_array($name, $vn)) {
-                $realArgv[$k] = $this->value;
-                $k++;
-                $inserted = $i;
-            } else {
-                $realArgv[$k] = $argv[$i];
+        $vn = ['subject', 'string', 'str', 'haystack'];
+        foreach ($vn as $n) {
+            if (($inserted = $ref->hasParamName($n)) !== false) {
+                break;
             }
-            if(strpos((string) $type, 'string') !== false) {
-                $findStr = $i;
-            }
-            $k++;
         }
-        if($findStr === false || $findStr !== 0) {
+
+        if ($inserted === 0) {
+            array_unshift($argv, $this->value);
+        } else {
+            $realArg = [];
+            foreach ($argv as $i => $v) {
+                if ($i === $inserted) {
+                    $realArg[] = $this->value;
+                }
+                $realArg[] = $v;
+            }
+            $argv = $realArg;
+        }
+
+        if ($inserted === false && $ref->hasType(0, 'string')) {
             self::$cacheFunc[$func] = -1;
             $this->undefinedMethod($func);
         }
-        if($inserted === false) {
+        if ($inserted === false) {
             $inserted = 0;
             array_unshift($argv, $this->value);
         }
         self::$cacheFunc[$func] = $inserted;
-        return $realArgv;
-    }
-
-    protected static function mayFuncName($name, $mbstatus)
-    {
-        $supportName = ['ord', 'sub' => 'substr', 'subCount' => 'substr_count', 'split' => 'str_split'];
-        if($mbstatus) {
-            if(isset($supportName[$name])) {
-                return "mb_{$supportName[$name]}";
-            }
-            if(function_exists("mb_str$name")) {
-                return "mb_str$name";
-            }
-        }
-        if(isset($supportName[$name])) {
-            return $supportName[$name];
-        }
-        $nn = preg_replace('([A-Z])', '_$1', $name);
-        if(function_exists("str_$nn")) {
-            return "str_$nn";
-        } else if(function_exists("str$nn")) {
-            return "str$nn";
-        }
-        if(!self::$standardFuncCache) {
-            self::$standardFuncCache = get_extension_funcs('standard');
-        }
-        if(in_array($name, self::$standardFuncCache)) {
-            $this->undefinedMethod($name);
-        }
-        return $name;
+        return $argv;
     }
 
     /**
@@ -181,22 +136,22 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
      */
     public static function strFind(string $content, $start, $end, $offset, &$findPos = 0)
     {
-        if(is_string($start)) {
+        if (is_string($start)) {
             $startlen = mb_strlen($start);
         } else {
             $startlen = $start[1];
             $start = $start[0];
         }
-        if($offset < 0) {
+        if ($offset < 0) {
             $startPos = mb_strrpos($content, $start, $offset);
         } else {
             $startPos = mb_strpos($content, $start, $offset);
         }
-        if($startPos === false) {
+        if ($startPos === false) {
             return false;
         }
         $endPos = mb_strpos($content, $end, $startPos + $startlen);
-        if($endPos === false) {
+        if ($endPos === false) {
             return false;
         }
         $findPos = $startPos;
@@ -216,8 +171,8 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
         $line = trim($str);
         $line = str_replace($seplist, '=', $line);
         parse_str($line, $result);
-        if($field) {
-            if(isset($result[$field])) {
+        if ($field) {
+            if (isset($result[$field])) {
                 return trim($result[$field]);
             }
             return null;
@@ -230,8 +185,8 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
     public static function isPrefix($str, $prefix)
     {
         $prefix = is_scalar($prefix) ? [$prefix] : $prefix;
-        foreach($prefix as $p) {
-            if(strpos($str, $p) === 0) {
+        foreach ($prefix as $p) {
+            if (strpos($str, $p) === 0) {
                 return true;
             }
         }
@@ -240,8 +195,8 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
 
     public static function hasStr($str, $list = [])
     {
-        foreach($list as $s) {
-            if(strpos($str, $s) >= 0) {
+        foreach ($list as $s) {
+            if (strpos($str, $s) >= 0) {
                 return true;
             }
         }
@@ -251,7 +206,7 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
     public static function checkStrSuffix($str, $endStr)
     {
         $idx = strpos($str, $endStr);
-        if((strlen($str) - $idx) === strlen($endStr)) {
+        if ((strlen($str) - $idx) === strlen($endStr)) {
             return true;
         }
         return false;
@@ -261,9 +216,9 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
     {
         $subLvl = substr_count($subDomain, '.');
         $upLvl = substr_count($upDomain, '.');
-        if($upLvl == $subLvl && $subDomain == $upDomain) {
+        if ($upLvl == $subLvl && $subDomain == $upDomain) {
             return 0;
-        } elseif($upLvl < $subLvl && checkStrSuffix($subDomain, ".$upDomain")) {
+        } elseif ($upLvl < $subLvl && checkStrSuffix($subDomain, ".$upDomain")) {
             return 1;
         }
         return -1;
@@ -273,7 +228,7 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
     {
         $letter = $isnum ? range(0, 9) : range('A', 'Z');
         $count = 0;
-        foreach($letter as $num) {
+        foreach ($letter as $num) {
             $count += mb_substr_count($str, $num);
         }
         return $count;
@@ -289,14 +244,22 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
         return $this->value;
     }
 
+    public function getIterator()
+    {
+        if (!$this->splitWordArray) {
+            $this->initWordSplit();
+        }
+        return $this->splitWordArray;
+    }
+
     protected function invalidIdx($idx)
     {
-        if(!is_int($idx)) {
+        if (!is_int($idx)) {
             throw new InvalidArgumentException('paramter #1 $idx need int');
         }
     }
 
-    public function offsetExists($idx)
+    public function offsetExists($idx): bool
     {
         $this->invalidIdx($idx);
         return $idx >= 0 && $idx < mb_strlen($this->value);
@@ -305,47 +268,161 @@ class Text extends Scalar implements \Iterator, \ArrayAccess
     public function offsetGet($idx)
     {
         $this->invalidIdx($idx);
+        if ($this->splitWordArray) {
+            return $this->splitWordArray[$idx];
+        }
         return $this->value[$idx];
     }
 
-    public function offsetSet($idx, $value)
+    public function offsetSet($idx, $value): void
     {
         $this->invalidIdx($idx);
-        if(is_scalar($value)) {
+        if (is_scalar($value)) {
             throw new InvalidArgumentException('paramter #2 $value need scalar');
         }
         $this->value = mb_substr($this->value, 0, $idx) . $value . mb_substr($this->value, $idx + 1);
     }
 
-    public function offsetUnset($idx)
+    public function offsetUnset($idx): void
     {
         $this->invalidIdx($idx);
         $this->value = mb_substr($this->value, 0, $idx) . mb_substr($this->value, $idx + 1);
     }
 
-    public function current()
+    public function sortSubPermutationCount(array $p1, array $p2)
     {
-        return $this->value[$this->offset];
+        $res = $p2[1] - $p1[1];
+        if ($res === 0) {
+            $res = $p2[2] - $p1[2];
+        }
+        return $res;
     }
 
-    public function key()
+    protected function firstCharWordSplit(array $strArr, int $pos): array
     {
-        return $this->offset;
+        $permutationCount = $this->firstSubPermutationCount($strArr, $pos);
+        uasort($permutationCount, [$this, 'sortSubPermutationCount']);
+        $lsl = $lc = 0;
+        foreach ($permutationCount as $i => $c) {
+            if ($c[1] <= $lc && $c[2] < $lsl) {
+                unset($permutationCount[$i]);
+            } else {
+                $lsl = $c[2];
+                $lc = $c[1];
+            }
+            if (empty($c)) {
+                unset($permutationCount[$i]);
+            }
+        }
+        return $permutationCount;
     }
 
-    public function next()
+    public function initWordSplit()
     {
-        $this->offset++;
+        $this->splitWordArray = $this->split();
     }
 
-    public function rewind()
+    public function wordSplit(string $str): array
     {
-        $this->offset = 0;
+        $strArr = parent::split($str);
+        $perm = [];
+        $len = 0;
+        do {
+            $perm = array_merge($perm, $this->firstCharWordSplit($strArr, $len));
+            array_shift($strArr);
+            $len++;
+        } while (count($strArr) > 1);
+        $this->wordSplitOffset += $len;
+        $permSize = count($perm);
+        for ($i = 0; $i < $permSize; $i++) {
+            if (empty($perm[$i])) {
+                continue;
+            }
+            if ($i + $i > $permSize) {
+                break;
+            }
+            $p = $perm[$i];
+            for ($j = $i + 1; $j < $permSize; $j++) {
+                if (empty($perm[$j])) {
+                    continue;
+                }
+                if ($p[1] >= $perm[$j][1] && ($p[3] + $p[2]) >= ($perm[$j][2] + $perm[$j][3])) {
+                    unset($perm[$j]);
+                }
+            }
+        }
+        $collect = [];
+        foreach ($perm as $pc) {
+            $collect[$pc[3]][] = [$pc[0], $pc[1]];
+        }
+
+        return $collect;
     }
 
-    public function valid()
+    /**
+     * 子字符串各排列出现次数
+     * 
+     * @param string|array $str
+     * @return array
+     */
+    public function subPermutationCount(string $str)
     {
-        return $this->offsetExists($this->offset);
+        $strArr = is_array($str) ? $str : parent::split($str);
+        $perm = [];
+        $pos = 0;
+        do {
+            $perm[] = $this->firstSubPermutationCount($strArr, $pos);
+            array_shift($strArr);
+            $pos++;
+        } while (count($strArr) > 1);
+        return $perm;
     }
 
+    /**
+     * 首字排列出现次数
+     * 
+     * @param array $strArr
+     * @param int   $pos
+     * @return array           array(组合字符串, 次数, 组合长度)
+     */
+    public function firstSubPermutationCount(array $strArr, int $pos): array
+    {
+        $strLen = count($strArr);
+        $ks = '';
+        $permutationCount = [];
+        for ($s = 0; $s < $strLen; $s++) {
+            $ks = $ks . $strArr[$s];
+            $permutationCount[$s] = [$ks, 0, $s + 1, $pos];
+        }
+        array_shift($permutationCount);
+        $len = $this->len();
+
+        $first = $strArr[0];
+        $i = $this->wordSplitOffset;
+        while ($i < $len) {
+            if ($first !== $this->splitWordArray[$i]) {
+                $i++;
+                continue;
+            }
+            $cs = $this->splitWordArray[$i];
+            $j = 1;
+
+            foreach ($permutationCount as $ns => &$sc) {
+                $k = $i + $j;
+                if ($k >= $len) {
+                    break;
+                }
+                $cs .= $this->splitWordArray[$k];
+                if ($sc[0] === $cs) {
+                    $sc[1]++;
+                } else {
+                    $i = $k;
+                    break;
+                }
+                $j++;
+            }
+            $i++;
+        }
+        return $permutationCount;
+    }
 }

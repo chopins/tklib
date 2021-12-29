@@ -766,7 +766,7 @@ class Process
             foreach($read as $rs) {
                 $pid = $this->poolCall($mainId, $rs, $callable);
                 if($pid === 0) {
-                    return 0;
+                    break;
                 }
             }
             if($loopCallable) {
@@ -778,6 +778,7 @@ class Process
             }
             usleep(self::$SLEEP_USEC);
         }
+        return 0;
     }
 
     /**

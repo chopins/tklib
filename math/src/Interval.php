@@ -110,23 +110,15 @@ class Interval
         $this->add($l, $r, self::SYMBOL[1], self::SYMBOL[3]);
     }
 
-    public function inNumberSet($value)
+    public function inNumberSet(int|float $value): bool
     {
-        if(!is_numeric($value)) {
-            return false;
-        }
-        switch($this->set) {
-            case self::SET_ZAHLEN:
-                return strpos($value, '.') === false;
-            case self::SET_NATURAL:
-                return strpos($value, '.') === false && $value >= 0;
-            case self::SET_P_ZAHLEN:
-                return strpos($value, '.') === false && $value > 0;
-            case self::SET_N_ZAHLEN:
-                return strpos($value, '.') === false && $value < 0;
-            default:
-                return true;
-        }
+        return match ($this->set) {
+            self::SET_ZAHLEN => is_int($value),
+            self::SET_NATURAL => is_int($value) && $value >= 0,
+            self::SET_P_ZAHLEN => is_int($value) && $value > 0,
+            self::SET_N_ZAHLEN => is_int($value) && $value < 0,
+            default => true,
+        };
     }
 
     protected function add($l, $r, $ls, $rs)
@@ -140,19 +132,19 @@ class Interval
         $this->ranges[] = [$l, $r, $ls, $rs];
     }
 
-    public function in($value)
+    public function in(int|float $value): bool
     {
         if(!$this->inNumberSet($value)) {
             return false;
         }
         foreach($this->ranges as $set) {
-            if($set[2] == self::SYMBOL[0] && $set[0] != self::L_INFINITAS && $value <= $set[0]) {
+            if($set[2] === self::SYMBOL[0] && $set[0] !== self::L_INFINITAS && $value <= $set[0]) {
                 continue;
-            } else if($set[2] == self::SYMBOL[1] && $set[0] != self::L_INFINITAS && $value < $set[0]) {
+            } else if($set[2] === self::SYMBOL[1] && $set[0] !== self::L_INFINITAS && $value < $set[0]) {
                 continue;
-            } else if($set[3] == self::SYMBOL[3] && $set[1] != self::R_INFINITAS && $value > $set[1]) {
+            } else if($set[3] === self::SYMBOL[3] && $set[1] !== self::R_INFINITAS && $value > $set[1]) {
                 continue;
-            } else if($set[3] == self::SYMBOL[2] && $set[1] != self::R_INFINITAS && $value >= $set[1]) {
+            } else if($set[3] === self::SYMBOL[2] && $set[1] !== self::R_INFINITAS && $value >= $set[1]) {
                 continue;
             }
             return true;

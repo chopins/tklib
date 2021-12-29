@@ -124,4 +124,20 @@ class FixedArray extends \SplFixedArray
         return false;
     }
 
+    public static function fromArray(array $array, bool $preserveKeys = true)
+    {
+        $size = count($array);
+        $obj = new static($size);
+        $i = 0;
+        foreach($array as $key => $value) {
+            if($preserveKeys && is_numeric($key)) {
+                $obj[$key] = $value;
+            } else {
+                $obj[$i] = $value;
+            }
+            $i++;
+        }
+        return $obj;
+    }
+
 }
