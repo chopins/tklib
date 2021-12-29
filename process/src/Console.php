@@ -10,6 +10,8 @@
 
 namespace Toknot\Process;
 
+use Toknot\Process\ShareMemory;
+
 /**
  * Console
  *
@@ -51,9 +53,9 @@ class Console
     public static function clearTTYLine($selfWidth = null)
     {
         static $ttywidth;
-        if(!$ttywidth && !$selfWidth) {
+        if (!$ttywidth && !$selfWidth) {
             list(, $ttywidth) = self::getTTYSize();
-        } elseif($selfWidth) {
+        } elseif ($selfWidth) {
             $ttywidth = $selfWidth;
         }
         echo "\r" . str_repeat(' ', $ttywidth);
@@ -77,18 +79,18 @@ class Console
             '-O' => $output,
         ];
         $url = escapeshellarg($url);
-        if(isset($_ENV['WGET_USER_AGENT'])) {
+        if (isset($_ENV['WGET_USER_AGENT'])) {
             $defOpt['--user-agent'] = $_ENV['WGET_USER_AGENT'];
         }
-        foreach($opt as $k => $v) {
+        foreach ($opt as $k => $v) {
             $defOpt[$k] = $v;
         }
         $option = '';
-        foreach($defOpt as $k => $v) {
+        foreach ($defOpt as $k => $v) {
             $v = escapeshellarg($v);
-            if(is_numeric($k)) {
+            if (is_numeric($k)) {
                 $option .= " $v";
-            } elseif(strlen($k) > 2) {
+            } elseif (strlen($k) > 2) {
                 $option .= " $k=$v";
             } else {
                 $option .= " $k $v";
@@ -96,7 +98,7 @@ class Console
         }
         $returnVar = 0;
         passthru("wget $option $url", $returnVar);
-        if(file_exists($output) && !filesize($output) && $returnVar) {
+        if (file_exists($output) && !filesize($output) && $returnVar) {
             trigger_error("wget has error and file($output) size is 0, Removed!", E_USER_WARNING);
             unlink($output);
         }
@@ -127,10 +129,10 @@ class Console
         $maskNum = floor($fn / $p);
         $mask = str_repeat('=', $maskNum);
         $mod = $fn % $p;
-        if($mod >= $p / 2 && $mod < $p) {
+        if ($mod >= $p / 2 && $mod < $p) {
             $mask .= '-';
         }
-        if($maskNum < ($totalTaskNum - 1)) {
+        if ($maskNum < ($totalTaskNum - 1)) {
             $mask .= ($cur % 2 == 0 ? '\\' : '/');
         }
         echo str_repeat("\t", $taskIdx * $tabNum) . $mask . "\r";
@@ -184,7 +186,7 @@ class Console
 
     public static function multiLinePrint($total, $line, $msg)
     {
-        if($line == 1) {
+        if ($line == 1) {
             echo PHP_EOL;
             echo self::cursorUp($total);
         }
@@ -202,8 +204,8 @@ class Console
         $partMsg[$part] = $msg;
         ksort($partMsg);
         $preTab = 0;
-        foreach($partMsg as $k => $m) {
-            if($k === $part) {
+        foreach ($partMsg as $k => $m) {
+            if ($k === $part) {
                 break;
             }
             $preTab += ceil(strlen($m) / 8);
@@ -219,7 +221,8 @@ class Console
      */
     public static function colorString($string, int $style)
     {
-        $map = [self::STYLE_BLOD => 1,
+        $map = [
+            self::STYLE_BLOD => 1,
             self::STYLE_UNDERLINE => 4,
             self::STYLE_BLINK => 5,
             self::STYLE_FB_SWAP => 7,
@@ -238,10 +241,11 @@ class Console
             self::STYLE_BG_COLOR_BLUE => 44,
             self::STYLE_BG_COLOR_PURPLE => 45,
             self::STYLE_BG_COLOR_TEAL => 46,
-            self::STYLE_BG_COLOR_WHITE => 47,];
+            self::STYLE_BG_COLOR_WHITE => 47,
+        ];
         $setVar = [];
-        foreach($map as $k => $v) {
-            if($style & $k) {
+        foreach ($map as $k => $v) {
+            if ($style & $k) {
                 $setVar[] = $v;
             }
         }
@@ -251,9 +255,51 @@ class Console
     public static function debugHrtime($flag)
     {
         $ct = hrtime(true);
-        $t = round(($ct - self::$lastTime)/1000000000, 4);
+        $t = round(($ct - self::$lastTime) / 1000000000, 4);
         echo "[$flag] CT:" . $ct . ' - UT:' . $t . PHP_EOL;
         self::$lastTime = $ct;
     }
 
+    public static function cutPrintMsg($s)
+    {
+        list(, $width) = Console::getTTYSize();
+        $len  = mb_strlen($s);
+        $ow = 0;
+        $ret = '';
+        for ($i = 0; $i < $len; $i++) {
+            $char = mb_substr($s, $i, 1);
+            strlen($char) > 1 ? $ow += 2 : $ow++;
+            if ($ow > $width) {
+                break;
+            }
+            $ret .= $char;
+        }
+        if ($ow < $width) {
+            $ret .= str_repeat(' ', $width - $ow);
+        }
+        return $ret;
+    }
+
+    public static function mpShmMessage(ShareMemory $mainShm, array $childsShm)
+    {
+        do {
+            $n = $mainShm->get('mp');
+            echo "start process num:$n\n";
+            usleep(100000);
+        } while ($n < 2);
+        while (true) {
+            $msg = "";
+            foreach ($childsShm as $i => $chm) {
+                $msg .= self::cutPrintMsg($chm->get('p' . $i)) . PHP_EOL;
+            }
+            echo $msg;
+            echo Console::cursorUp($n - 1);
+
+            if ($mainShm->get('mp') < 2) {
+                break;
+            }
+            sleep(1);
+        }
+        ShareMemory::destroyAll();
+    }
 }

@@ -31,6 +31,11 @@ class ShareMemory
     private $blocks = [];
     private $lastValue = [];
 
+    const MAX_SYS_SEQ_AMOUNT  = 100;
+    const MAX_SEQ_AMOUNT = 6;
+    const MAX_SEQ_SIZE = 131072;
+    private static $seqNum = 0;
+
     /**
      * key default store path
      * 
@@ -57,7 +62,13 @@ class ShareMemory
      */
     public function __construct($shmName, string $project, $size = null, int $permissions = 0600)
     {
-        if(strlen($project) != 1) {
+        if ($size > self::MAX_SEQ_SIZE) {
+            throw new RuntimeException('ShareMemory size cannot over ' . self::MAX_SEQ_SIZE);
+        }
+        if (self::$seqNum >= self::MAX_SEQ_AMOUNT) {
+            throw new RuntimeException('amount ShareMemory cannot over ' . self::MAX_SEQ_AMOUNT);
+        }
+        if (strlen($project) != 1) {
             throw new RuntimeException('project name only a one character');
         }
         $this->permissions = $permissions;
@@ -66,14 +77,20 @@ class ShareMemory
 
         $this->workspace = self::getWorkspace();
 
-        if(!file_exists($this->workspace)) {
-            if(@mkdir($this->workspace, $this->permissions, true)) {
+        if (!file_exists($this->workspace)) {
+            if (@mkdir($this->workspace, $this->permissions, true)) {
                 @chmod($this->workspace, $this->permissions | 0700);
             }
-        } elseif(!is_dir($this->workspace)) {
+        } elseif (!is_dir($this->workspace)) {
             throw new RuntimeException("$this->workspace is not directory");
         }
+
+        if (count(Path::getDirFile(self::$PHP_SHARE_MEMORY_KEY_SPACE)) >= self::MAX_SYS_SEQ_AMOUNT) {
+            throw new RuntimeException('max amount of ShareMemory on a system can not over ' . self::MAX_SYS_SEQ_AMOUNT);
+        }
+
         $this->attach($shmName);
+        self::$seqNum++;
     }
 
     public static function getWorkspace()
@@ -85,11 +102,11 @@ class ShareMemory
     public function hasChange($varName)
     {
         $key = $this->varKey($varName);
-        if(!shm_has_var($this->shm, $key)) {
+        if (!shm_has_var($this->shm, $key)) {
             return false;
         }
         $v = shm_get_var($this->shm, $key);
-        if(empty($v[1]) || $v[1] > $this->lastValue[$key]) {
+        if (empty($v[1]) || $v[1] > $this->lastValue[$key]) {
             return true;
         }
         return false;
@@ -97,7 +114,7 @@ class ShareMemory
 
     protected function unConnect()
     {
-        if(!$this->shm) {
+        if (!$this->shm) {
             throw new RuntimeException('before must be creates or open a shared memory segment');
         }
     }
@@ -105,11 +122,11 @@ class ShareMemory
     protected function varKey(string $name)
     {
         $this->unConnect();
-        if(!is_dir($this->projectSpace)) {
+        if (!is_dir($this->projectSpace)) {
             throw new \RuntimeException("Project Space $this->projectSpace not exists");
         }
         $file = $this->projectSpace . '/' . $name;
-        if(!touch($file)) {
+        if (!touch($file)) {
             throw new \RuntimeException("touch $file error");
         }
         return ftok($file, $this->project);
@@ -123,14 +140,14 @@ class ShareMemory
      */
     protected function setSize($size)
     {
-        if($size) {
+        if ($size) {
             $this->size = Byte::toByte($size);
         } else {
             $iniVar = ini_get('sysvshm.init_mem');
             $this->size = empty($iniVar) ? 10000 : $iniVar;
         }
         $shmhead = 8 + PHP_INT_SIZE * 4;
-        if($this->size < 8 + $shmhead) {
+        if ($this->size < 8 + $shmhead) {
             throw new \RuntimeException("share memory must greater then $shmhead");
         }
     }
@@ -139,13 +156,13 @@ class ShareMemory
     {
         $this->projectSpace = $this->workspace . '/' . $this->project . '@' . $shmName;
 
-        if(!file_exists($this->projectSpace)) {
+        if (!file_exists($this->projectSpace)) {
             mkdir($this->projectSpace, $this->permissions);
             chmod($this->projectSpace, $this->permissions | 0700);
-        } elseif(!is_dir($this->projectSpace)) {
+        } elseif (!is_dir($this->projectSpace)) {
             throw new RuntimeException("$this->projectSpace is not directory");
         }
-        if(!is_dir($this->projectSpace)) {
+        if (!is_dir($this->projectSpace)) {
             throw new RuntimeException("Project space $this->projectSpace create error");
         }
 
@@ -185,7 +202,7 @@ class ShareMemory
         $len = strlen($sv);
         $c1 = $len + (3 * PHP_INT_SIZE);
         $c2 = (int) ($c1 / PHP_INT_SIZE);
-        return $c2+1 * PHP_INT_SIZE + PHP_INT_SIZE;
+        return $c2 + 1 * PHP_INT_SIZE + PHP_INT_SIZE;
     }
 
     public function setBlocking($varName, bool $enable)
@@ -200,18 +217,18 @@ class ShareMemory
 
         do {
             $has = shm_has_var($this->shm, $key);
-            if(!$has && empty($this->blocks[$key])) {
+            if (!$has && empty($this->blocks[$key])) {
                 return null;
-            } elseif(!$has) {
+            } elseif (!$has) {
                 usleep(100000);
                 continue;
             }
             $v = shm_get_var($this->shm, $key);
-            if(empty($this->lastValue[$key]) || empty($this->blocks[$key]) || $v[1] > $this->lastValue[$key]) {
+            if (empty($this->lastValue[$key]) || empty($this->blocks[$key]) || $v[1] > $this->lastValue[$key]) {
                 return trim($v[0]);
             }
             usleep(100000);
-        } while(!empty($this->blocks[$key]));
+        } while (!empty($this->blocks[$key]));
         return trim($v[0]);
     }
 
@@ -223,7 +240,7 @@ class ShareMemory
 
     private static function lastTime()
     {
-        if(PHP_VERSION_ID > 70300) {
+        if (PHP_VERSION_ID > 70300) {
             $hrtime = hrtime();
             return (($hrtime[0] * 1000000000 + $hrtime[1]) / 1000000000);
         }
@@ -236,7 +253,7 @@ class ShareMemory
         $lt = self::lastTime();
         $value = [$value, $lt];
         $ret = shm_put_var($this->shm, $key, $value);
-        if($ret) {
+        if ($ret) {
             $this->lastValue[$key] = $lt;
         }
     }
@@ -245,7 +262,7 @@ class ShareMemory
     {
         $key = $this->varKey($varname);
         $ret = shm_remove_var($this->shm, $key);
-        if($ret) {
+        if ($ret) {
             unlink($this->workspace . '/' . $varname);
         }
         return $ret;
@@ -254,21 +271,20 @@ class ShareMemory
     public static function destroyAll($p = null)
     {
         $workspace = self::getWorkspace();
-        if(!is_dir($workspace)) {
+        if (!is_dir($workspace)) {
             return;
         }
         Path::dirWalk($workspace, function ($path) {
             unlink($path);
         }, function ($dir) use ($p) {
-                list($project, $shmName) = explode('@', basename($dir));
-                if($p && $p != $project) {
-                    return;
-                }
-                $key = ftok($dir, $project);
-                $shm = shm_attach($key, null);
-                $r = shm_remove($shm);
-                rmdir($dir);
-            }, true);
+            list($project, $shmName) = explode('@', basename($dir));
+            if ($p && $p != $project) {
+                return;
+            }
+            $key = ftok($dir, $project);
+            $shm = shm_attach($key, null);
+            $r = shm_remove($shm);
+            rmdir($dir);
+        }, true);
     }
-
 }

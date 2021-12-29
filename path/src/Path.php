@@ -24,14 +24,14 @@ class Path
     public static function join(...$paths)
     {
         $root = '';
-        if(strpos($args[0], DIRECTORY_SEPARATOR) === 0) {
+        if(strpos($paths[0], DIRECTORY_SEPARATOR) === 0) {
             $root = DIRECTORY_SEPARATOR;
         }
-        array_walk($args, function (&$v) {
+        array_walk($paths, function (&$v) {
             $v = trim($v, '\\/ ');
         });
 
-        return $root . join(DIRECTORY_SEPARATOR, $args);
+        return $root . join(DIRECTORY_SEPARATOR, $paths);
     }
 
     /**
@@ -133,7 +133,7 @@ class Path
         $valueErrorMessage = 'paramter #2($perms) only int or is [ugoa...][[+-=...][rwxXst...]...] format';
         try {
             $perm = new Number($perms);
-            return chmod($path, $this->value);
+            return chmod($path, $perms);
         } catch(\ValueError $ex) {
             if(!preg_match('/^[ugoa+-=rwxXst]+$/', $perms, $m)) {
                 throw new \ValueError($valueErrorMessage);
@@ -239,13 +239,12 @@ class Path
 
     public static function getDirFile($path)
     {
-        $d = dir($path);
-        $file = [];
-        while(false !== ($f = $d->read())) {
-            if($f == '.' || $f == '..') {
-                continue;
-            }
-            $file[] = $f;
+        $file = scandir($path);
+        if($file[0] == '.') {
+            array_shift($file);
+        }
+        if($file[0] == '..') {
+            array_shift($file);
         }
         return $file;
     }
