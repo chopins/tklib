@@ -830,11 +830,11 @@ class HTTP
         self::BLUE("{$this->method} {$this->url} ", true);
         echo '</button></h2><div id="commonConfig" class="accordion-collapse collapse show" aria-labelledby="commonConfigHeading" data-bs-parent="#mainAccordion"><div class="accordion-body d-grid gap-2">';
         if (!$this->httpCode) {
-            '<div class="alert alert-danger" role="alert">'. curl_error($this->curl) . '</div>';
+            '<div class="alert alert-danger" role="alert">' . curl_error($this->curl) . '</div>';
         }
         if (self::$showRequestHeader) {
             $id = 'showRequestHeaderCollapse-' . self::$execCount;
-            echo '<a href="#a-'.$id.'" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-'.$id.'">实际请求头</a><div class="collapse" id="' . $id . '"><ul class="list-group">';
+            echo '<a href="#a-' . $id . '" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-' . $id . '">实际请求头</a><div class="collapse" id="' . $id . '"><ul class="list-group">';
             foreach ($this->realRequestHeader as $i => $header) {
                 if (!$header) {
                     continue;
@@ -851,7 +851,7 @@ class HTTP
         }
         if (self::$showResponseHeader) {
             $id = 'showResponseHeaderCollapse-' . self::$execCount;
-            echo '<a href="#a-'.$id.'" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-'.$id.'">响应头：'.$this->httpCode .'</a><div class="collapse" id="' . $id . '"><ul class="list-group">';
+            echo '<a href="#a-' . $id . '" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-' . $id . '">响应头：' . $this->httpCode . '</a><div class="collapse" id="' . $id . '"><ul class="list-group">';
             foreach ($this->responseHeader as $i => $header) {
                 echo '<li class="list-group-item">';
                 $header = trim($header);
@@ -1024,10 +1024,21 @@ class HTTP
                     font-size: 14px;
                 }
 
-                :root {
-                    --pseudo-display: block;
+                u {
+                    left: 1em;
+                    position: absolute;
+                    text-decoration: none;
+                    color: #666;
+                    font-size: 1em;
+                    cursor: pointer;
+                    background-color: #FFFFFF;
+                    display: inline-block;
+                    width: 2.6em;
+                    text-align: right;
                 }
-
+                u:hover {
+                    text-decoration:underline;
+                }
                 html {
                     width: 99%;
                     word-break: break-all;
@@ -1037,15 +1048,22 @@ class HTTP
                     padding: 1px;
                     color: yellow;
                 }
-
-                code p {
-                    margin: 0;
+                code>ul {
+                    display: block;
+                    padding-left: 2px;
+                }
+                code>ul>ul {
+                    display: block;
+                }
+                ul {
+                    list-style: none;
+                    display: none;
                 }
 
-                m,
                 x {
                     color: blue;
                     font-weight: bold;
+                    margin: 0 2px;
                 }
 
                 t {
@@ -1069,6 +1087,7 @@ class HTTP
                     font-size-adjust: 0.5;
                     letter-spacing: 1px;
                     white-space: pre;
+                    margin-left: 2em;
                 }
 
                 code button {
@@ -1080,18 +1099,13 @@ class HTTP
                     margin-right: 10px;
                 }
 
-                code>div>div {
-                    display: none;
-                }
-
-                code>div>div+m::before {
-                    content: '......';
-                    display: var(--pseudo-display);
-                    margin-left: 20px;
-                }
-
                 code div {
+                    display: none;
                     margin-left: 20px;
+                }
+
+                code>div {
+                    display: block;
                 }
 
                 body {
@@ -1111,11 +1125,6 @@ class HTTP
                     font-size: 10px;
                     color: #666;
                 }
-
-                x {
-                    font-weight: bold;
-                    margin: 0 2px;
-                }
             </style>
             <?php if (self::$bootstrapCssLink) {
                 foreach (self::$bootstrapCssLink as $link) {
@@ -1130,6 +1139,7 @@ class HTTP
             ?>
             <script>
                 const d = document;
+                var idx = 1;
 
                 function $(e) {
                     if (typeof e == 'function') {
@@ -1145,15 +1155,15 @@ class HTTP
                     let t = '';
                     if (o instanceof Array) {
                         if (o.length == 0) {
-                            return '<m>[]</m>,';
+                            return '[],';
                         }
-                        for (let i in o) t += '<p><b>' + i + ':</b>' + jsonview(o[i]) + '</p>';
-                        t = t.slice(0, -5) + '</p>';
-                        return '<m>[</m><div>' + t + '</div><m>]</m>,';
+                        for (let i in o) t += '<li><u>' + (idx++) + '</u><b>' + i + ':</b>' + jsonview(o[i]) + '</li>';
+                        t = t.slice(0, -5) + '</li>';
+                        return '[<ul>' + t + '</ul></li><li><u>' + (idx++) + '</u>],';
                     } else if (o instanceof Object) {
-                        for (let i in o) t += '<p><b>"' + i + '":</b>' + jsonview(o[i]) + '</p>';
-                        t = t.slice(0, -5) + '</p>';
-                        return '<m>{</m><div>' + t + '</div><m>}</m>,';
+                        for (let i in o) t += '<li><u>' + (idx++) + '</u><b>"' + i + '":</b>' + jsonview(o[i]) + '</li>';
+                        t = t.slice(0, -5) + '</li>';
+                        return '{<ul>' + t + '</ul></li><li><u>' + (idx++) + '</u>},';
                     } else if (typeof o == 'string') {
                         o = o.replaceAll(/[\r\n\t]/img, function(m) {
                             let a = {
@@ -1192,7 +1202,8 @@ class HTTP
                         if (type == 'json') {
                             s = d.createElement('code');
                             try {
-                                s.innerHTML = '<button class="btn btn-success dropdown-toggle">显示/隐藏</button><br />' + jsonview(JSON.parse(v)).slice(0, -1);
+                                s.innerHTML = '<ul><u>' + (idx++) + '</u>' + jsonview(JSON.parse(v)) + '</ul>';
+                                idx = 1;
                             } catch (e) {
                                 s.innerHTML = v;
                             }
@@ -1213,10 +1224,12 @@ class HTTP
                         }
                         e.after(s);
                     });
-                    $('code>button').forEach((c) => c.addEventListener('click', (e) => {
-                        let k = e.target.parentNode.querySelector('div>div');
-                        d.documentElement.style.setProperty('--pseudo-display', getComputedStyle(k).display);
-                        k.style.display = k.style.display == 'block' ? 'none' : 'block';
+                    $('u').forEach((c) => c.addEventListener('click', (e) => {
+                        let ul = e.target.parentNode.querySelector('ul');
+                        if (!ul) {
+                            return;
+                        }
+                        ul.style.display = ul.style.display == 'block' ? 'none' : 'block';
                     }));
                 });
             </script>
