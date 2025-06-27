@@ -1,8 +1,8 @@
 <?php
 
-class Struct
+abstract class Struct
 {
-    public function __construct(
+    final public function __construct(
         public readonly mixed $value
     ) {}
 }
@@ -148,22 +148,35 @@ abstract class Binary
             if (is_subclass_of($typeName, Type::class)) {
                 static::$typeNames[] = $typeName;
                 static::$format .= $typeName::FLAG;
-                if(PHP_INT_SIZE == 8 && $typeName == UInt::class) {
-                    static::$unformat .= Integer::FLAG;
+                if ($typeName == ULong::class || $typeName == LULong::class || $typeName == HULong::class) {
+                    static::$unformat .= Long::FLAG;
                 } else {
                     static::$unformat .= $typeName::FLAG;
                 }
             }
         }
     }
-    public static function new($class, $data)
+
+    public static function new($data)
     {
         static::getTypeNames();
         $a = unpack(static::$unformat, $data);
         $values = [];
         $i = 0;
         foreach ($a as $v) {
-            $values = new static::$typeNames[$i]($v);
+            $class = static::$typeNames[$i];
+            if (($class == ULong::class || $class == LULong::class || $class == HULong::class) && $v < 0) {
+                $flag = GMP_MSW_FIRST;
+                if($class == ULong::class) {
+                    $flag |= GMP_NATIVE_ENDIAN;
+                } else if($class == LULong::class) {
+                    $flag |= GMP_LITTLE_ENDIAN;
+                } else {
+                    $flag |= GMP_BIG_ENDIAN;
+                }
+                $v = gmp_strval(gmp_import(pack($class::FLAG, $v), 8, $flag));
+            }
+            $values = new $class($v);
             $i++;
         }
         return new static(...$values);
