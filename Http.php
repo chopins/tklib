@@ -1060,6 +1060,12 @@ class HTTP
                     display: none;
                 }
 
+                ul li {
+                    white-space: normal;
+                    word-break: break-all;
+                    word-wrap: break-word;
+                }
+
                 x {
                     color: blue;
                     font-weight: bold;
