@@ -453,6 +453,7 @@ class HTTP
         if (is_string(self::$requestBodyType)) {
             HttpRequestBodyType::from(self::$requestBodyType);
         }
+
         if (self::$requestBodyType == HttpRequestBodyType::JSON) {
             $this->requestBody = is_array($data) ? json_encode($data) : $data;
             self::$requestHeader[] = 'Content-Type: application/json';
@@ -600,6 +601,7 @@ class HTTP
             $this->responseHeader[] = $h;
             return strlen($h);
         };
+        self::$requestHeader = array_unique(self::$requestHeader);
         if (self::$requestHeader) {
             foreach (self::$requestHeader as $hk => $hv) {
                 if (!is_numeric($hk)) {
