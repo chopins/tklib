@@ -217,6 +217,7 @@ class HTTP
      * @var bool 是否显示请求头
      */
     public static bool $showRequestHeader = false;
+    public static bool $showRequestBody = false;
     /**
      * @var bool 是否使用表格显示数组结果
      */
@@ -779,6 +780,9 @@ class HTTP
         } else {
             self::BLUE("{$this->method} {$this->url} ", true);
         }
+        if(self::$showRequestBody) {
+            echo $this->requestBody . PHP_EOL;
+        }
         if (self::$showResponseHeader) {
             foreach ($this->responseHeader as $i => $header) {
                 if (strpos($header, ':') === false) {
@@ -848,6 +852,9 @@ class HTTP
                 echo '</li>';
             }
             echo '</ul></div>';
+        }
+        if(self::$showRequestBody) {
+            echo "<code>{$this->requestBody}</code>";
         }
         if (self::$showResponseHeader) {
             $id = 'showResponseHeaderCollapse-' . self::$execCount;
