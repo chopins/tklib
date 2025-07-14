@@ -1140,8 +1140,12 @@ class HTTP
                     font-size: 10px;
                     color: #666;
                 }
-                textarea {
+                code>textarea {
                     opacity: 0;
+                    width:1px;height:1px;float:right;
+                }
+                code>button {
+                    float:right;
                 }
             </style>
             <?php if (self::$bootstrapCssLink) {
@@ -1210,8 +1214,9 @@ class HTTP
                     }
                     return t;
                 }
-                function copy(obj)
+                function copyResponse(e)
                 {
+                    let obj = e.target;
                     let btn = obj;
                     do {
                         find = false;
@@ -1242,7 +1247,7 @@ class HTTP
                         if (type == 'json') {
                             s = d.createElement('code');
                             try {
-                                s.innerHTML = '<div class="d-grid gap-2 d-md-flex justify-content-md-end"><button class="btn btn-primary"onclick="return copy(this)">复制</button><textarea style="width:1px;height:1px;"></textarea></div><ul><u>' + (idx++) + '</u>' + jsonview(JSON.parse(v)) + '</ul>';
+                                s.innerHTML = '<button class="btn btn-primary">复制</button><textarea></textarea></div><ul><u>' + (idx++) + '</u>' + jsonview(JSON.parse(v)) + '</ul>';
                                 idx = 1;
                             } catch (e) {
                                 s.innerHTML = v;
@@ -1264,6 +1269,7 @@ class HTTP
                         }
                         e.after(s);
                     });
+                    $('code>button').forEach((b) => b.addEventListener('click', copyResponse));
                     $('u').forEach((c) => c.addEventListener('click', (e) => {
                         let ul = e.target.parentNode.querySelector('ul');
                         if (!ul) {
