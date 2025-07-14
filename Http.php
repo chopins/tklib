@@ -1140,6 +1140,9 @@ class HTTP
                     font-size: 10px;
                     color: #666;
                 }
+                textarea {
+                    opacity: 0;
+                }
             </style>
             <?php if (self::$bootstrapCssLink) {
                 foreach (self::$bootstrapCssLink as $link) {
@@ -1207,7 +1210,29 @@ class HTTP
                     }
                     return t;
                 }
+                function copy(obj)
+                {
+                    let btn = obj;
+                    do {
+                        find = false;
+                        if(obj.parentElement.tagName == 'CODE') {
+                            find = true;
+                        } else if(obj.parentElement.tagName == 'BODY') {
+                            find = true;
+                        }
+                        obj = obj.parentElement;
+                    } while(!find);
 
+                    let code = obj.previousElementSibling;
+                    if(window.isSecureContext) {
+                        navigator.clipboard.writeText(code.textContent);
+                    } else {
+                        btn.nextElementSibling.value = code.textContent;
+                        btn.nextElementSibling.select();
+                        document.execCommand('copy');
+                    }
+                    alert('已复制');
+                }
 
                 $(function() {
                     $('.responseContent').forEach(function(e) {
@@ -1217,7 +1242,7 @@ class HTTP
                         if (type == 'json') {
                             s = d.createElement('code');
                             try {
-                                s.innerHTML = '<ul><u>' + (idx++) + '</u>' + jsonview(JSON.parse(v)) + '</ul>';
+                                s.innerHTML = '<div class="d-grid gap-2 d-md-flex justify-content-md-end"><button class="btn btn-primary"onclick="return copy(this)">复制</button><textarea style="width:1px;height:1px;"></textarea></div><ul><u>' + (idx++) + '</u>' + jsonview(JSON.parse(v)) + '</ul>';
                                 idx = 1;
                             } catch (e) {
                                 s.innerHTML = v;
@@ -1235,7 +1260,7 @@ class HTTP
                             s = d.createElement('iframe');
                             s.width = "99%";
                             s.height = "900";
-                            s.srcdoc = v.replaceAll('&lt;/script', '</script').replaceAll('&amp;', '&');
+                            s.srcdoc = '<pre>' + v.replaceAll('&lt;/script', '</script').replaceAll('&amp;', '&') + '</pre>';
                         }
                         e.after(s);
                     });
