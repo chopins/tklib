@@ -782,7 +782,7 @@ class HTTP
         } else {
             self::BLUE("{$this->method} {$this->url} ", true);
         }
-        if(self::$showRequestBody) {
+        if (self::$showRequestBody) {
             echo $this->requestBody . PHP_EOL;
         }
         if (self::$showResponseHeader) {
@@ -832,15 +832,22 @@ class HTTP
 
     protected function showHTML(): void
     {
-        echo '<div class="accordion-item"><h2 class="accordion-header" id="commonConfigHeading"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#commonConfig" aria-expanded="true" aria-controls="commonConfig">';
+        echo '<div class="accordion-item">
+        <h2 class="accordion-header" id="commonConfigHeading">
+        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#commonConfig" aria-expanded="true" aria-controls="commonConfig">';
         self::BLUE("{$this->method} {$this->url} ", true);
-        echo '</button></h2><div id="commonConfig" class="accordion-collapse collapse show" aria-labelledby="commonConfigHeading" data-bs-parent="#mainAccordion"><div class="accordion-body d-grid gap-2">';
+        echo '</button>
+        </h2>
+        <div id="commonConfig" class="accordion-collapse collapse show" aria-labelledby="commonConfigHeading" data-bs-parent="#mainAccordion">
+        <div class="accordion-body d-grid gap-2">';
         if (!$this->httpCode) {
             '<div class="alert alert-danger" role="alert">' . curl_error($this->curl) . '</div>';
         }
         if (self::$showRequestHeader) {
             $id = 'showRequestHeaderCollapse-' . self::$execCount;
-            echo '<a href="#a-' . $id . '" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-' . $id . '">实际请求头</a><div class="collapse" id="' . $id . '"><ul class="list-group">';
+            echo '<a href="#a-' . $id . '" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-' . $id . '">实际请求头</a>
+            <div class="collapse" id="' . $id . '">
+            <ul class="list-group">';
             foreach ($this->realRequestHeader as $i => $header) {
                 if (!$header) {
                     continue;
@@ -855,12 +862,14 @@ class HTTP
             }
             echo '</ul></div>';
         }
-        if(self::$showRequestBody) {
+        if (self::$showRequestBody) {
             echo "<code>{$this->requestBody}</code>";
         }
         if (self::$showResponseHeader) {
             $id = 'showResponseHeaderCollapse-' . self::$execCount;
-            echo '<a href="#a-' . $id . '" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-' . $id . '">响应头：' . $this->httpCode . '</a><div class="collapse" id="' . $id . '"><ul class="list-group">';
+            echo '<a href="#a-' . $id . '" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-' . $id . '">响应头：' . $this->httpCode . '</a>
+            <div class="collapse" id="' . $id . '">
+            <ul class="list-group">';
             foreach ($this->responseHeader as $i => $header) {
                 echo '<li class="list-group-item">';
                 $header = trim($header);
@@ -874,6 +883,7 @@ class HTTP
             echo '</ul></div>';
         }
         if (!$this->responseBody) {
+            echo '</div></div></div>';
             return;
         }
         $contentType = $this->isJson ? 'json' : ($this->isXml ? 'xml' : 'html');
@@ -1045,9 +1055,11 @@ class HTTP
                     width: 2.6em;
                     text-align: right;
                 }
+
                 u:hover {
-                    text-decoration:underline;
+                    text-decoration: underline;
                 }
+
                 html {
                     width: 99%;
                     word-break: break-all;
@@ -1057,13 +1069,16 @@ class HTTP
                     padding: 1px;
                     color: yellow;
                 }
+
                 code>ul {
                     display: block;
                     padding-left: 2px;
                 }
+
                 code>ul>ul {
                     display: block;
                 }
+
                 ul {
                     list-style: none;
                     display: none;
@@ -1140,12 +1155,16 @@ class HTTP
                     font-size: 10px;
                     color: #666;
                 }
+
                 code>textarea {
                     opacity: 0;
-                    width:1px;height:1px;float:right;
+                    width: 1px;
+                    height: 1px;
+                    float: right;
                 }
+
                 code>button {
-                    float:right;
+                    float: right;
                 }
             </style>
             <?php if (self::$bootstrapCssLink) {
@@ -1214,22 +1233,22 @@ class HTTP
                     }
                     return t;
                 }
-                function copyResponse(e)
-                {
+
+                function copyResponse(e) {
                     let obj = e.target;
                     let btn = obj;
                     do {
                         find = false;
-                        if(obj.parentElement.tagName == 'CODE') {
+                        if (obj.parentElement.tagName == 'CODE') {
                             find = true;
-                        } else if(obj.parentElement.tagName == 'BODY') {
+                        } else if (obj.parentElement.tagName == 'BODY') {
                             find = true;
                         }
                         obj = obj.parentElement;
-                    } while(!find);
+                    } while (!find);
 
                     let code = obj.previousElementSibling;
-                    if(window.isSecureContext) {
+                    if (window.isSecureContext) {
                         navigator.clipboard.writeText(code.textContent);
                     } else {
                         btn.nextElementSibling.value = code.textContent;
