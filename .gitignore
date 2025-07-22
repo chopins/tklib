@@ -1,3 +1,5 @@
 temp/
 /nbproject/private/
 .vscode
+*.log
+php_errors.*
