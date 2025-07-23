@@ -863,7 +863,11 @@ class HTTP
             echo '</ul></div>';
         }
         if (self::$showRequestBody) {
-            echo "<code>{$this->requestBody}</code>";
+            if(self::$requestBodyType == HttpRequestBodyType::JSON) {
+                echo "<script class=\"responseContent\" type=\"text/plain\" content-type=\"json\">{$this->requestBody}</script>";
+            } else {
+                echo "<code>{$this->requestBody}</code>";
+            }
         }
         if (self::$showResponseHeader) {
             $id = 'showResponseHeaderCollapse-' . self::$execCount;
