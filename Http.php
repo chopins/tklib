@@ -845,13 +845,14 @@ class HTTP
 
     protected function showHTML(): void
     {
+        $execNum = self::$execCount;
         echo '<div class="accordion-item">
-        <h2 class="accordion-header" id="commonConfigHeading">
-        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#commonConfig" aria-expanded="true" aria-controls="commonConfig">';
+        <h2 class="accordion-header" id="commonConfigHeading-'.$execNum. '">
+        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#commonConfig-'.$execNum. '" aria-expanded="true" aria-controls="commonConfig-'.$execNum. '">';
         self::BLUE("{$this->method} {$this->url} ", true);
         echo '</button>
         </h2>
-        <div id="commonConfig" class="accordion-collapse collapse show" aria-labelledby="commonConfigHeading" data-bs-parent="#mainAccordion">
+        <div id="commonConfig-'.$execNum. '" class="accordion-collapse collapse show" aria-labelledby="commonConfigHeading-'.$execNum. '" data-bs-parent="#mainAccordion">
         <div class="accordion-body d-grid gap-2">';
         if (!$this->httpCode) {
             '<div class="alert alert-danger" role="alert">' . curl_error($this->curl) . '</div>';
@@ -900,13 +901,14 @@ class HTTP
             echo '</ul></div>';
         }
         if (!$this->responseBody) {
-            echo '</div></div></div>';
+            echo '<div class="d-grid gap-2 d-md-block"><a href="" class="btn btn-info">刷新</a></div></div></div></div>';
             return;
         }
         $contentType = $this->isJson ? 'json' : ($this->isXml ? 'xml' : 'html');
         $content = $this->isJson ? $this->responseBody : str_ireplace(['&', '</script'], ['&amp;', '&lt;/script'], $this->responseBody);
         echo <<<HTML
         <script class="responseContent" type="text/plain" content-type="{$contentType}">{$content}</script>
+        <div class="d-grid gap-2 d-md-block"><a href="" class="btn btn-info">刷新</a></div>
         </div></div></div>
         HTML;
     }
