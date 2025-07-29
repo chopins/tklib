@@ -454,15 +454,42 @@ class HTTP
             HttpRequestBodyType::from(self::$requestBodyType);
         }
 
+        switch(self::$requestBodyType) {
+            case HttpRequestBodyType::JSON:
+                $this->requestBody = is_array($data) ? json_encode($data) : $data;
+                self::$requestHeader['Content-Type'] = 'application/json';
+                return;
+            case HttpRequestBodyType::XML:
+                $this->requestBody = is_array($data) ? self::xmlEncode($data) : $data;
+                self::$requestHeader['Content-Type'] = 'application/xml';
+                return;
+            case HttpRequestBodyType::RAW:
+                self::$requestHeader['Content-Type'] = "text/plain";
+                break;
+            default:
+                foreach(self::$requestHeader as $i => $v) {
+                    if(strpos($v, 'Content-Type:') === 0) {
+                        unset(self::$requestHeader[$i]);
+                    }
+                }
+                break;
+
+        }
+        $this->requestBody = $data;
+        return;
+
         if (self::$requestBodyType == HttpRequestBodyType::JSON) {
             $this->requestBody = is_array($data) ? json_encode($data) : $data;
-            self::$requestHeader[] = 'Content-Type: application/json';
+            self::$requestHeader['Content-Type'] = 'application/json';
+            return;
         } else if (self::$requestBodyType->value == HttpRequestBodyType::XML) {
             $this->requestBody = is_array($data) ? self::xmlEncode($data) : $data;
-            self::$requestHeader[] = 'Content-Type: application/xml';
-        } else {
-            $this->requestBody = $data;
+            self::$requestHeader['Content-Type'] = 'application/xml';
+            return;
+        } else if(self::$requestBodyType->value == HttpRequestBodyType::FORM_URL){
+            self::$requestHeader['Content-Type'] = "application/x-www-form-urlencoded";
         }
+        $this->requestBody = $data;
     }
     protected static function xmlEncode(array $data): void
     {
@@ -866,7 +893,7 @@ class HTTP
             if(self::$requestBodyType == HttpRequestBodyType::JSON) {
                 echo "<script class=\"responseContent\" type=\"text/plain\" content-type=\"json\">{$this->requestBody}</script>";
             } else {
-                echo "<code>{$this->requestBody}</code>";
+                echo '<code>'. (is_scalar($this->requestBody) ? $this->requestBody : print_r($this->requestBody, true)) . '</code>';
             }
         }
         if (self::$showResponseHeader) {
