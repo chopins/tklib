@@ -476,20 +476,6 @@ class HTTP
 
         }
         $this->requestBody = $data;
-        return;
-
-        if (self::$requestBodyType == HttpRequestBodyType::JSON) {
-            $this->requestBody = is_array($data) ? json_encode($data) : $data;
-            self::$requestHeader['Content-Type'] = 'application/json';
-            return;
-        } else if (self::$requestBodyType->value == HttpRequestBodyType::XML) {
-            $this->requestBody = is_array($data) ? self::xmlEncode($data) : $data;
-            self::$requestHeader['Content-Type'] = 'application/xml';
-            return;
-        } else if(self::$requestBodyType->value == HttpRequestBodyType::FORM_URL){
-            self::$requestHeader['Content-Type'] = "application/x-www-form-urlencoded";
-        }
-        $this->requestBody = $data;
     }
     protected static function xmlEncode(array $data): void
     {
@@ -985,18 +971,18 @@ class HTTP
         return true;
     }
 
-    public function showArrayTable(array $array): void
+    public function showArrayTable(Traversable $array): void
     {
         if (!self::$showArrayTable) {
             print_r($array);
             return;
         }
 
-        $cols = exec('tput cols');
+        $cols = (int)exec('tput cols');
         $lineSep = str_repeat('=', $cols) . PHP_EOL;
         echo $lineSep;
         foreach (self::$arrayTableLayout as $line) {
-            $width = floor($cols / count($line));
+            $width = (int)floor($cols / count($line));
             foreach ($line as $k => $n) {
                 if ($n == 'string') {
                     echo str_pad(self::$colors['BLUE'] . $k . self::$colors['END'] . " => $array[$k]", $width);
@@ -1011,7 +997,7 @@ class HTTP
         }
     }
 
-    protected function showList(array $array, string $indent): void
+    protected function showList(array $array, int $indent): void
     {
         $indentStr = str_repeat(' ', $indent);
         $i = 0;
@@ -1108,6 +1094,10 @@ class HTTP
 
                 code>ul>ul {
                     display: block;
+                }
+
+                code ul li i {
+                    color:#999;
                 }
 
                 ul {
@@ -1229,7 +1219,7 @@ class HTTP
                         if (o.length == 0) {
                             return '[],';
                         }
-                        for (let i in o) t += '<li><u>' + (idx++) + '</u><b>' + i + ':</b>' + jsonview(o[i]) + '</li>';
+                        for (let i in o) t += '<li><u>' + (idx++) + '</u><i>' + i + ':</i>' + jsonview(o[i]) + '</li>';
                         t = t.slice(0, -5) + '</li>';
                         return '[<ul>' + t + '</ul></li><li><u>' + (idx++) + '</u>],';
                     } else if (o instanceof Object) {
