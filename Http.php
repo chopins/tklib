@@ -135,6 +135,7 @@ class HTTP
      * @var int 当前总执行次数
      */
     public static int $execCount = 0;
+    public static bool $verbose = false;
     /**
      * @var int 当前显示的请求数量
      */
@@ -454,7 +455,7 @@ class HTTP
             HttpRequestBodyType::from(self::$requestBodyType);
         }
 
-        switch(self::$requestBodyType) {
+        switch (self::$requestBodyType) {
             case HttpRequestBodyType::JSON:
                 $this->requestBody = is_array($data) ? json_encode($data) : $data;
                 self::$requestHeader['Content-Type'] = 'application/json';
@@ -467,13 +468,12 @@ class HTTP
                 self::$requestHeader['Content-Type'] = "text/plain";
                 break;
             default:
-                foreach(self::$requestHeader as $i => $v) {
-                    if(strpos($v, 'Content-Type:') === 0) {
+                foreach (self::$requestHeader as $i => $v) {
+                    if (strpos($v, 'Content-Type:') === 0) {
                         unset(self::$requestHeader[$i]);
                     }
                 }
                 break;
-
         }
         $this->requestBody = $data;
     }
@@ -624,7 +624,9 @@ class HTTP
             }
             $this->currentCurlOptions[CURLOPT_HTTPHEADER] = self::$requestHeader;
         }
+
         $this->currentCurlOptions[CURLOPT_RETURNTRANSFER] = 1;
+
         $this->currentCurlOptions[CURLOPT_CONNECTTIMEOUT] = self::$connectTimeout;
         $this->currentCurlOptions[CURLOPT_TIMEOUT] = self::$execTimeout;
 
@@ -637,6 +639,7 @@ class HTTP
         if (self::$curlOptions) {
             curl_setopt_array($this->curl, self::$curlOptions);
         }
+
         $this->responseBody = curl_exec($this->curl);
 
         $this->getCurlInfo();
@@ -734,6 +737,7 @@ class HTTP
         if (!$this->run) {
             return $this;
         }
+
         if (self::$isCLI) {
             $this->showConsole();
         } else {
@@ -847,12 +851,12 @@ class HTTP
     {
         $execNum = self::$execCount;
         echo '<div class="accordion-item">
-        <h2 class="accordion-header" id="commonConfigHeading-'.$execNum. '">
-        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#commonConfig-'.$execNum. '" aria-expanded="true" aria-controls="commonConfig-'.$execNum. '">';
+        <h2 class="accordion-header" id="commonConfigHeading-' . $execNum . '">
+        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#commonConfig-' . $execNum . '" aria-expanded="true" aria-controls="commonConfig-' . $execNum . '">';
         self::BLUE("{$this->method} {$this->url} ", true);
         echo '</button>
         </h2>
-        <div id="commonConfig-'.$execNum. '" class="accordion-collapse collapse show" aria-labelledby="commonConfigHeading-'.$execNum. '" data-bs-parent="#mainAccordion">
+        <div id="commonConfig-' . $execNum . '" class="accordion-collapse collapse show" aria-labelledby="commonConfigHeading-' . $execNum . '" data-bs-parent="#mainAccordion">
         <div class="accordion-body d-grid gap-2">';
         if (!$this->httpCode) {
             '<div class="alert alert-danger" role="alert">' . curl_error($this->curl) . '</div>';
@@ -877,10 +881,10 @@ class HTTP
             echo '</ul></div>';
         }
         if (self::$showRequestBody) {
-            if(self::$requestBodyType == HttpRequestBodyType::JSON) {
+            if (self::$requestBodyType == HttpRequestBodyType::JSON) {
                 echo "<script class=\"responseContent\" type=\"text/plain\" content-type=\"json\">{$this->requestBody}</script>";
             } else {
-                echo '<code>'. (is_scalar($this->requestBody) ? $this->requestBody : print_r($this->requestBody, true)) . '</code>';
+                echo '<code>' . (is_scalar($this->requestBody) ? $this->requestBody : print_r($this->requestBody, true)) . '</code>';
             }
         }
         if (self::$showResponseHeader) {
@@ -1099,7 +1103,7 @@ class HTTP
                 }
 
                 code ul li i {
-                    color:#999;
+                    color: #999;
                 }
 
                 ul {
