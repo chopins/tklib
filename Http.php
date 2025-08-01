@@ -850,22 +850,26 @@ class HTTP
     protected function showHTML(): void
     {
         $execNum = self::$execCount;
-        echo '<div class="accordion-item">
-        <h2 class="accordion-header" id="commonConfigHeading-' . $execNum . '">
-        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#commonConfig-' . $execNum . '" aria-expanded="true" aria-controls="commonConfig-' . $execNum . '">';
+        echo <<<HTML
+        <div class="accordion-item">
+        <h2 class="accordion-header" id="commonConfigHeading-{$execNum}">
+        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#commonConfig-{$execNum}" aria-expanded="true" aria-controls="commonConfig-{$execNum}">
+        HTML;
         self::BLUE("{$this->method} {$this->url} ", true);
-        echo '</button>
-        </h2>
-        <div id="commonConfig-' . $execNum . '" class="accordion-collapse collapse show" aria-labelledby="commonConfigHeading-' . $execNum . '" data-bs-parent="#mainAccordion">
-        <div class="accordion-body d-grid gap-2">';
+        echo <<<HTML
+        </button></h2>
+        <div id="commonConfig-{$execNum}" class="accordion-collapse collapse show" aria-labelledby="commonConfigHeading-{$execNum}" data-bs-parent="#mainAccordion">
+        <div class="accordion-body d-grid gap-2">
+        HTML;
         if (!$this->httpCode) {
-            '<div class="alert alert-danger" role="alert">' . curl_error($this->curl) . '</div>';
+            echo '<div class="alert alert-danger" role="alert">' . curl_error($this->curl) . '</div>';
         }
         if (self::$showRequestHeader) {
             $id = 'showRequestHeaderCollapse-' . self::$execCount;
-            echo '<a href="#a-' . $id . '" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-' . $id . '">实际请求头</a>
-            <div class="collapse" id="' . $id . '">
-            <ul class="list-group">';
+            echo <<<HTML
+            <a href="#a-{$id}" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#{$id}" aria-expanded="false" aria-controls="{$id}" id="a-{$id}">实际请求头</a>
+            <div class="collapse" id="{$id}"><ul class="list-group">';
+            HTML;
             foreach ($this->realRequestHeader as $i => $header) {
                 if (!$header) {
                     continue;
@@ -889,9 +893,21 @@ class HTTP
         }
         if (self::$showResponseHeader) {
             $id = 'showResponseHeaderCollapse-' . self::$execCount;
-            echo '<a href="#a-' . $id . '" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#' . $id . '" aria-expanded="false" aria-controls="' . $id . '" id="a-' . $id . '">响应头：' . $this->httpCode . '</a>
-            <div class="collapse" id="' . $id . '">
-            <ul class="list-group">';
+            if($this->httpCode >= 500) {
+                $color = 'danger';
+            } else if($this->httpCode >= 400) {
+                $color = 'warning';
+            } else if($this->httpCode < 300) {
+                $color = 'success';
+            } else {
+                $color = 'primary';
+            }
+
+            echo <<<HTML
+            <div class="d-grid gap-2 d-md-block"><a href="javascript:location.reload()" class="btn btn-info">刷新</a>
+            <a href="#a-{$id}" class="btn btn-outline-{$color} dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#{$id}" aria-expanded="false" aria-controls="{$id}" id="a-{$id}">响应头：{$this->httpCode}</a></div>
+            <div class="collapse" id="{$id}"><ul class="list-group">
+            HTML;
             foreach ($this->responseHeader as $i => $header) {
                 echo '<li class="list-group-item">';
                 $header = trim($header);
@@ -905,14 +921,14 @@ class HTTP
             echo '</ul></div>';
         }
         if (!$this->responseBody) {
-            echo '<div class="d-grid gap-2 d-md-block"><a href="" class="btn btn-info">刷新</a></div></div></div></div>';
+            echo '</div></div></div>';
             return;
         }
         $contentType = $this->isJson ? 'json' : ($this->isXml ? 'xml' : 'html');
         $content = $this->isJson ? $this->responseBody : str_ireplace(['&', '</script'], ['&amp;', '&lt;/script'], $this->responseBody);
         echo <<<HTML
         <script class="responseContent" type="text/plain" content-type="{$contentType}">{$content}</script>
-        <div class="d-grid gap-2 d-md-block"><a href="" class="btn btn-info">刷新</a></div>
+
         </div></div></div>
         HTML;
     }
@@ -1036,15 +1052,32 @@ class HTTP
         if ($this->curl instanceof CurlHandle) {
             curl_close($this->curl);
         }
-        $msg = 'All requested and show' . PHP_EOL;
+        $msg = 'All('.HTTP::$execCount.') requested and shown' . PHP_EOL;
         if (!HTTP::$showCount) {
             $msg =  'Exec ' . HTTP::$execCount . ' request  and no  output data' . PHP_EOL;
         } else if (HTTP::$showCount != HTTP::$execCount) {
             $msg = 'Exec ' . HTTP::$execCount . ' request  and ' . HTTP::$showCount . ' show output' . PHP_EOL;
         }
         if (!self::$isCLI) {
-            echo "</div><div class=\"alert alert-success\" role=\"alert\">$msg</div>";
-            echo '</div></body></html>';
+            echo <<<HTML
+            </div><div class="alert alert-success" role="alert">$msg</div>
+            <div class="modal" tabindex="-1" id="PageLoad">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">页面加载成功</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                </div>
+            </div>
+            </div>
+            <script>document.addEventListener('DOMContentLoaded', function() {
+                const loadModal = new bootstrap.Modal('#PageLoad', {keyboard: true});
+                loadModal.show();
+                setTimeout(() => loadModal.hide(), 500);
+            });</script>
+            </div></body></html>
+            HTML;
         } else {
             self::GREEN($msg);
         }
