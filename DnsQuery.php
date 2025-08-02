@@ -575,7 +575,7 @@ class DnsQuery
     }
     public static function ipv6long($ipv6)
     {
-        return pack('n8', hexdec(str_replace(':', $ipv6)));
+        return pack('n8', hexdec(str_replace(':', '', $ipv6)));
     }
     public static function long2ipv6($data, &$i)
     {
@@ -587,7 +587,7 @@ class DnsQuery
         try {
             $ret = unpack($format, $string, $offset);
             if (!$ret) {
-                throw new ValueError(error_get_last());
+                throw new ValueError(error_get_last()['message']);
             }
         } catch (ValueError $e) {
             self::log("Offset:$offset", $e->__toString());
@@ -763,14 +763,14 @@ class DnsQuery
     {
         $flag  = (1 < 15) | 2;
         $h = [$this->transId, $flag, 0, 0, 0, 0];
-        $result .= pack('n*', ...$h);
+        $result = pack('n*', ...$h);
         return $result;
     }
     public function buildNotImplementedData()
     {
         $flag  = (1 < 15) | 5;
         $h = [$this->transId, $flag, 0, 0, 0, 0];
-        $result .= pack('n*', ...$h);
+        $result = pack('n*', ...$h);
         return $result;
     }
     public function base64url_encode($data)
