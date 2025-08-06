@@ -20,7 +20,17 @@ class TTF
         'Offset16' => 'n',
         'Offset24' => 'nC',
         'Offset32' => 'N',
-        'Version16Dot16' => 'c4'
+        'Version16Dot16' => 'c4',
+        'Tuple' => [
+            'coordinates' => 'F2DOT14', //[axisCount]
+        ],
+        'TupleVariationHeader' => [
+            'variationDataSize' => 'uint16',
+            'tupleIndex' => 'uint16',
+            'peakTuple' => 'Tuple',
+            'intermediateStartTuple' => 'Tuple',
+            'intermediateEndTuple' => 'Tuple',
+        ]
     ];
     public const offsetTableFormat = [
         'sfntVersion' => 'uint32', //0x00010000   OTTO
@@ -202,14 +212,14 @@ class TTF
                 ],
                 'defaultUVSTable' => [
                     'numUnicodeValueRanges' => 'uint32',
-                    'ranges' => [//[numUnicodeValueRanges]
+                    'ranges' => [ //[numUnicodeValueRanges]
                         'startUnicodeValue' => 'uint24',
                         'additionalCount' => 'uint8',
                     ]
                 ],
                 'nonDefaultUVStable' => [
                     'numUVSMappings' => 'uint32',
-                    'uvsMappings' => [//[numUVSMappings]
+                    'uvsMappings' => [ //[numUVSMappings]
                         'unicodeValue' => 'uint24',
                         'glyphID' => 'uint16',
                     ]
@@ -220,46 +230,190 @@ class TTF
 
         /**变长**/
         'loca' => [
-            'shortFormat' => 'Offset16',
-            'longFormat' => 'Offset32',
-            'numGlyphs'
+            'shortFormat' => [
+                'offsets' => 'Offset16' //[numGlyphs + 1]
+            ],
+            'longFormat' => [
+                'offsets' => 'Offset32' //[numGlyphs + 1]
+            ],
         ],
         /**变长**/
         'glyf' => [
             'simple' => [
-                'header',
-                'contourEndPts',
-                'instructionLen',
-                'instructions',
-                'flags',
-                'XCoordinates',
-                'YCoordinates'
+                'numberOfContours' => 'int16',
+                'xMin' => 'int16',
+                'yMin' => 'int16',
+                'xMax' => 'int16',
+                'yMax' => 'int16',
+                'endPtsOfContours' => 'uint16',
+                'instructionLength' => 'uint16',
+                'instructions' => 'uint8', //[instructionLength]
+                'flags' => 'uint8', //[variable]
+                'XCoordinates' => 'uint8|int16', //[variable] 类型取决与 flags 是否设置 X_SHORT_VECTOR 与 X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR
+                'YCoordinates' => 'uint8|int16' //[variable]
             ],
             'complex' => [
-                'header',
-                'component' => [
-                    'flags',
-                    'glyphIndex',
-                    'arg1',
-                    'arg2',
-                    'transform'
-                ],
-                'instrunctions'
+                'numberOfContours' => 'int16', //-1
+                'xMin' => 'int16',
+                'yMin' => 'int16',
+                'xMax' => 'int16',
+                'yMax' => 'int16',
+                'flags' => 'uint16',
+                'glyphIndex' => 'uint16',
+                'argument1' => 'uint8|uint16|int8|int16',
+                'argument2' => 'uint8|uint16|int8|int16',
+                'transform'
             ]
         ],
         /**变长**/
         'hmtx' => [
-            'advanceWidth' => 'n',
-            'lsb' => 'n',
-            'lsb' => 'n',
-            'advanceWidth'
+            'hMetrics' => [ //[numberOfHMetrics]
+                'advanceWidth' => 'UFWORD',
+                'lsb' => 'FWORD',
+            ],
+            'leftSideBearings' => 'FWORD' //[numGlyphs -numberOfHMetrics]
         ],
         /**变长**/
-        'name' => [],
+        'name' => [
+            'version0' => [
+                'version' => 'uint16',
+                'count' => 'uint16',
+                'storageOffset' => 'Offset16',
+                'nameRecord' => [ //[count]
+                    '(Variable)'
+                ]
+            ],
+            'version1' => [
+                'version' => 'uint16',
+                'count' => 'uint16',
+                'storageOffset' => 'Offset16',
+                'nameRecord' => [ //[count]
+                    'platformID' => 'uint16',
+                    'encodingID' => 'uint16',
+                    'languageID' => 'uint16',
+                    'nameID' => 'uint16',
+                    'length' => 'uint16',
+                    'stringOffset' => 'Offset16'
+                ],
+                'langTagCount' => 'uint16',
+                'langTagRecord' => [
+                    'length' => 'uint16',
+                    'langTagOffset' => 'Offset16'
+                ],
+                '(Variable)'
+            ],
+        ],
         /*96*/
-        'os/2' => [],
+        'OS/2' => [
+            'version' => 'uint16',
+            'xAvgCharWidth' => 'FWORD',
+            'usWeightClass' => 'uint16',
+            'usWidthClass' => 'uint16',
+            'fsType' => 'uint16',
+            'ySubscriptXSize' => 'FWORD',
+            'ySubscriptYSize' => 'FWORD',
+            'ySubscriptXOffset' => 'FWORD',
+            'ySubscriptYOffset' => 'FWORD',
+            'ySuperscriptXSize' => 'FWORD',
+            'ySuperscriptYSize' => 'FWORD',
+            'ySuperscriptXOffset' => 'FWORD',
+            'ySuperscriptYOffset' => 'FWORD',
+            'yStrikeoutSize' => 'FWORD',
+            'yStrikeoutPosition' => 'FWORD',
+            'sFamilyClass' => 'int16',
+            'panose' => 'uint8', //[10]
+            'ulUnicodeRange1' => 'uint32',
+            'ulUnicodeRange2' => 'uint32',
+            'ulUnicodeRange3' => 'uint32',
+            'ulUnicodeRange4' => 'uint32',
+            'achVendID' => 'Tag',
+            'fsSelection' => 'uint16',
+            'usFirstCharIndex' => 'uint16',
+            'usLastCharIndex' => 'uint16',
+            'sTypoAscender' => 'FWORD',
+            'sTypoDescender' => 'FWORD',
+            'sTypoLineGap' => 'FWORD',
+            'usWinAscent' => 'UFWORD',
+            'usWinDescent' => 'UFWORD', //version0
+            'ulCodePageRange1' => 'uint32', //version 1 add
+            'ulCodePageRange2' => 'uint32', //version 1 add
+            'sxHeight' => 'FWORD', //version2 add
+            'sCapHeight' => 'FWORD', //version2 add
+            'usDefaultChar' => 'uint16', //version2 add
+            'usBreakChar' => 'uint16', //version2 add
+            'usMaxContext' => 'uint16', //version2 add
+            'usLowerOpticalPointSize' => 'uint16', //version 5 add
+            'usUpperOpticalPointSize' => 'uint16', //version 5 add
+        ],
         /**变长**/
-        'post' => [],
+        'post' => [
+            'version' => 'Version16Dot16', //support version 1.0,2.0,3.0, not support version 2.5 and 4.0
+            'italicAngle' => 'Fixed',
+            'underlinePosition' => 'FWORD',
+            'underlineThickness' => 'FWORD',
+            'isFixedPitch' => 'uint32',
+            'minMemType42' => 'uint32',
+            'maxMemType42' => 'uint32',
+            'minMemType1' => 'uint32',
+            'maxMemType1' => 'uint32',
+            'numGlyphs' => 'uint16', //For version 2.0
+            'glyphNameIndex' => 'uint16', //numGlyphs] For version 2.0
+            'stringData' => 'uint8' //[variable]  For version 2.0
+        ],
+        'vhea' => [
+            'majorVersion' => 'uint16',
+            'minorVersion' => 'uint16',
+            'ascender' => 'FWORD',
+            'descender' => 'FWORD',
+            'lineGap' => 'FWORD',
+            'advanceWidthMax' => 'UFWORD',
+            'minLeftSideBearing' => 'FWORD',
+            'minRightSideBearing' => 'FWORD',
+            'xMaxExtent' => 'FWORD',
+            'caretSlopeRise' => 'int16',
+            'caretSlopeRun' => 'int16',
+            'caretOffset' => 'int16',
+            'reserved0' => 'int16',
+            'reserved1' => 'int16',
+            'reserved2' => 'int16',
+            'reserved3' => 'int16',
+            'metricDataFormat' => 'int16',
+            'numberOfHMetrics' => 'uint16',
+        ],
+        'meta' => [
+            'version' => 'uint32',
+            'flags' => 'uint32',
+            'reserved' => 'uint32',
+            'dataMapsCount' => 'uint32',
+            'dataMaps' => [
+                'tag' => 'Tag',
+                'dataOffset' => 'Offset32',
+                'dataLength' => 'uint32'
+            ]
+        ],
+        'cvar' => [
+            'majorVersion' => 'uint16',
+            'minorVersion' => 'uint16',
+            'tupleVariationCount' => 'uint16',
+            'dataOffset' => 'Offset16',
+            'tupleVariationHeaders' => 'TupleVariationHeader',  //[tupleVariationCount]
+        ],
+        'avar' => [
+            'majorVersion' => 'uint16',
+            'minorVersion' => 'uint16',
+            'reserved' => 'uint16',
+            'axisCount' => 'uint16',
+            'axisSegmentMaps' => [ //[axisCount]
+                'positionMapCount' => 'uint16',
+                'axisValueMaps' => [ //[positionMapCount]
+                    'fromCoordinate' => 'F2DOT14',
+                    'toCoordinate'  => 'F2DOT14',
+                ]
+            ]
+        ],
+        'cvt' => 'FWORD', //[n]
+        'fpgm' => 'uint8', //[n]
+
     ];
 
     public $offset = [];
