@@ -30,7 +30,17 @@ class TTF
             'peakTuple' => 'Tuple',
             'intermediateStartTuple' => 'Tuple',
             'intermediateEndTuple' => 'Tuple',
-        ]
+        ],
+        'ValueRecord' => [
+            'xPlacement' => 'int16',
+            'yPlacement' => 'int16',
+            'xAdvance' => 'int16',
+            'yAdvance' => 'int16',
+            'xPlaDeviceOffset' => 'Offset16',
+            'yPlaDeviceOffset' => 'Offset16',
+            'xAdvDeviceOffset' => 'Offset16',
+            'yAdvDeviceOffset' => 'Offset16',
+        ],
     ];
     public const offsetTableFormat = [
         'sfntVersion' => 'uint32', //0x00010000   OTTO
@@ -413,19 +423,355 @@ class TTF
         ],
         'cvt' => 'FWORD', //[n]
         'fpgm' => 'uint8', //[n]
-
+        'prep' => 'uint8', //[n]
+        'sbix' => [
+            'version' => 'uint16',
+            'flags' => 'uint16',
+            'numStrikes' => 'uint32',
+            'strikeOffsets' => 'Offset32', //[numStrikes]
+            'strike' => [
+                'ppem' => 'uint16',
+                'ppi' => 'uint16',
+                'glyphDataOffsets' => 'Offset32', //[numGlyphs+1]
+                'glyph' => [
+                    'originOffsetX' => 'int16',
+                    'originOffsetY' => 'int16',
+                    'graphicType' => 'Tag',
+                    'data' => 'uint8', //[]
+                ]
+            ],
+        ],
+        'vmtx' => [
+            'advanceHeight' => 'UFWORD',
+            'topSideBearing' => 'FWORD',
+            ''
+        ],
+        'kern' => [
+            'version',
+            'nTables',
+            'Format0' => [
+                'version' => 'uint16',
+                'length' => 'uint16',
+                'coverage' => 'uint16',
+                'nPairs' => 'uint16',
+                'searchRange' => 'uint16',
+                'entrySelector' => 'uint16',
+                'rangeShift' => 'uint16',
+                'kernPairs' => [ //[nPairs]
+                    'left' => 'uint16',
+                    'right' => 'uint16',
+                    'value' => 'FWORD'
+                ]
+            ],
+            'Format2' => [
+                'version' => 'uint16',
+                'length' => 'uint16',
+                'coverage' => 'uint16',
+                'rowWidth' => 'uint16',
+                'leftClassOffset' => 'Offset16',
+                'rightClassOffset' => 'Offset16',
+                'kerningArrayOffset' => 'Offset16',
+                'firstGlyph' => 'uint16',
+                'nGlyphs' => 'uint16'
+            ]
+        ],
+        'hdmx' => [
+            'version' => 'uint16',
+            'numRecords' => 'uint16',
+            'sizeDeviceRecord' => 'uint32',
+            'records' => [ //[numRecords]
+                'pixelSize' => 'uint8',
+                'maxWidth' => 'uint8',
+                'widths' => 'uint8', //[numGlyphs]
+            ]
+        ],
+        'gvar' => [
+            'majorVersion' => 'uint16',
+            'minorVersion' => 'uint16',
+            'axisCount' => 'uint16',
+            'sharedTupleCount' => 'uint16',
+            'sharedTuplesOffset' => 'Offset32',
+            'glyphCount' => 'uint16',
+            'flags' => 'uint16',
+            'glyphVariationDataArrayOffset' => 'Offset32',
+            'glyphVariationDataOffsets' => 'Offset16|Offset32', //[glyphCount + 1]
+            'sharedTuples' => 'Tuple', //[sharedTupleCount]
+            'GlyphVariationData' => [
+                'tupleVariationCount' => 'uint16',
+                'dataOffset' => 'Offset16',
+                'tupleVariationHeaders' => 'TupleVariationHeader', //[tupleCount]
+            ]
+        ],
+        'gasp' => [
+            'version' => 'uint16',
+            'numRanges' => 'uint16',
+            'gaspRanges' => [ //[numRanges]
+                'rangeMaxPPEM' => 'uint16',
+                'rangeGaspBehavior' => 'uint16'
+            ]
+        ],
+        'GSUB' => [
+            'version1.0' => [
+                'majorVersion' => 'uint16',
+                'minorVersion' => 'uint16',
+                'scriptListOffset' => 'Offset16',
+                'featureListOffset' => 'Offset16',
+                'lookupListOffset' => 'Offset16'
+            ],
+            'version1.1' => [
+                'majorVersion' => 'uint16',
+                'minorVersion' => 'uint16',
+                'scriptListOffset' => 'Offset16',
+                'featureListOffset' => 'Offset16',
+                'lookupListOffset' => 'Offset16',
+                'featureVariationsOffset' => 'Offset32',
+                'SingleSubstFormat1' => [
+                    'format' => 'uint16',
+                    'coverageOffset' => 'Offset16',
+                    'deltaGlyphID' => 'int16'
+                ],
+                'SingleSubstFormat2' => [
+                    'format' => 'uint16',
+                    'coverageOffset' => 'Offset16',
+                    'glyphCount' => 'uint16',
+                    'substituteGlyphIDs' => 'uint16', //[glyphCount]
+                ],
+                'MultipleSubstFormat1' => [
+                    'format' => 'uint16',
+                    'coverageOffset' => 'Offset16',
+                    'sequenceCount' => 'uint16',
+                    'sequenceOffsets' => 'Offset16',
+                    'SequenceTable' => [
+                        'glyphCount' => 'uint16',
+                        'substituteGlyphIDs' => 'uint16'
+                    ],
+                    'AlternateSubstFormat1' => [
+                        'format' => 'uint16',
+                        'coverageOffset' => 'Offset16',
+                        'alternateSetCount' => 'uint16',
+                        'alternateSetOffsets' => 'Offset16', //[alternateSetCount]
+                        'AlternateSetTable' => [
+                            'glyphCount' => 'uint16',
+                            'alternateGlyphIDs' => 'uint16', //[glyphCount]
+                        ]
+                    ],
+                    'LigatureSubstFormat1' => [
+                        'format' => 'uint16',
+                        'coverageOffset' => 'Offset16',
+                        'ligatureSetCount' => 'uint16',
+                        'ligatureSetOffsets' => 'Offset16', //[ligatureSetCount]
+                        'LigatureSetTable' => [
+                            'ligatureCount' => 'uint16',
+                            'ligatureOffsets' => 'Offset16', //[LigatureCount]
+                        ],
+                        'LigatureTable' => [
+                            'ligatureGlyph' => 'uint16',
+                            'componentCount' => 'uint16',
+                            'componentGlyphIDs' => 'uint16', //[componentCount -1]
+                        ],
+                        'SubstExtensionFormat1' => [
+                            'format' => 'uint16',
+                            'extensionLookupType' => 'uint16',
+                            'extensionOffset' => 'Offset32',
+                        ],
+                        'ReverseChainSingleSubstFormat1' => [
+                            'format' => 'uint16',
+                            'coverageOffset' => 'Offset16',
+                            'backtrackGlyphCount' => 'uint16',
+                            'backtrackCoverageOffsets' => 'Offset16', //[backtrackGlyphCount]
+                            'lookaheadGlyphCount' => 'uint16',
+                            'lookaheadCoverageOffsets' => 'Offset16', //[lookaheadGlyphCount]
+                            'glyphCount' => 'uint16',
+                            'substituteGlyphIDs' => 'uint16', //[glyphCount]
+                        ],
+                    ],
+                ]
+            ]
+        ],
+        'GPOS' => [
+            'version1.0' => [
+                'majorVersion' => 'uint16',
+                'minorVersion' => 'uint16',
+                'scriptListOffset' => 'Offset16',
+                'featureListOffset' => 'Offset16',
+                'lookupListOffset' => 'Offset16',
+            ],
+            'version1.1' => [
+                'majorVersion' => 'uint16',
+                'minorVersion' => 'uint16',
+                'scriptListOffset' => 'Offset16',
+                'featureListOffset' => 'Offset16',
+                'lookupListOffset' => 'Offset16',
+                'featureVariationsOffset' => 'Offset32',
+                'SinglePosFormat1' => [
+                    'format' => 'uint16',
+                    'coverageOffset' => 'Offset16',
+                    'valueFormat' => 'uint16',
+                    'valueRecord' => 'ValueRecord'
+                ],
+                'SinglePosFormat2' => [
+                    'format' => 'uint16',
+                    'coverageOffset' => 'Offset16',
+                    'valueFormat' => 'uint16',
+                    'valueCount' => 'uint16',
+                    'valueRecords' => 'ValueRecord' //[valueCount]
+                ],
+                'PairPosFormat1' => [
+                    'format' => 'uint16',
+                    'coverageOffset' => 'Offset16',
+                    'valueFormat1' => 'uint16',
+                    'valueFormat2' => 'uint16',
+                    'pairSetCount' => 'uint16',
+                    'pairSetOffsets' => 'Offset16',
+                    'PairSetTable' => [
+                        'pairValueCount' => 'uint16',
+                        'pairValueRecords' => [ //[pairValueCount]
+                            'secondGlyph' => 'uint16',
+                            'valueRecord1' => 'ValueRecord',
+                            'valueRecord2' => 'ValueRecord'
+                        ],
+                    ]
+                ],
+                'PairPosFormat2' => [
+                    'format' => 'uint16',
+                    'coverageOffset' => 'Offset16',
+                    'valueFormat1' => 'uint16',
+                    'valueFormat2' => 'uint16',
+                    'classDef1Offset' => 'Offset16',
+                    'classDef2Offset' => 'Offset16',
+                    'class1Count' => 'uint16',
+                    'class2Count' => 'uint16',
+                    'class1Records' => [ //[class1Count]
+                        'class2Records' => [ //[class2Count]
+                            'valueRecord1' => 'ValueRecord',
+                            'valueRecord2' => 'ValueRecord'
+                        ]
+                    ]
+                ],
+                'PairPosFormat2' => [
+                    'format' => 'uint16',
+                    'coverageOffset' => 'Offset16',
+                    'valueFormat1' => 'uint16',
+                    'valueFormat2' => 'uint16',
+                    'classDef1Offset' => 'Offset16',
+                    'classDef2Offset' => 'Offset16',
+                    'class1Count' => 'uint16',
+                    'class2Count' => 'uint16',
+                    'class1Records' => [ //[class1Count]
+                        'class2Records' => [ //[class2Count]
+                            'valueRecord1' => 'ValueRecord',
+                            'valueRecord2' => 'ValueRecord',
+                        ]
+                    ]
+                ],
+                'CursivePosFormat1' => [
+                    'format' => 'uint16',
+                    'coverageOffset' => 'Offset16',
+                    'entryExitCount' => 'uint16',
+                    'entryExitRecords' => [ //[entryExitCount]
+                        'entryAnchorOffset' => 'Offset16',
+                        'exitAnchorOffset' => 'Offset16',
+                    ]
+                ],
+                'MarkBasePosFormat1' => [
+                    'format' => 'uint16',
+                    'markCoverageOffset' => 'Offset16',
+                    'baseCoverageOffset' => 'Offset16',
+                    'markClassCount' => 'uint16',
+                    'markArrayOffset' => 'Offset16',
+                    'baseArrayOffset' => 'Offset16',
+                    'BaseArrayTable' => [
+                        'baseCount' => 'uint16',
+                        'baseRecords' => [ //[baseCount]
+                            'baseAnchorOffsets' => 'Offset16', //[markClassCount]
+                        ]
+                    ]
+                ],
+                'MarkLigPosFormat1' => [
+                    'format' => 'uint16',
+                    'markCoverageOffset' => 'Offset16',
+                    'ligatureCoverageOffset' => 'Offset16',
+                    'markClassCount' => 'uint16',
+                    'markArrayOffset' => 'Offset16',
+                    'ligatureArrayOffset' => 'Offset16',
+                    'LigatureArrayTable' => [
+                        'ligatureCount' => 'uint16',
+                        'ligatureAttachOffsets' => 'Offset16',
+                        'LigatureAttachTable' => [
+                            'componentCount' => 'uint16',
+                            'componentRecords' => [//[componentCount]
+                                'ligatureAnchorOffsets' => 'Offset16' //[markClassCount]
+                            ]
+                        ]
+                    ]
+                ],
+                'MarkMarkPosFormat1' => [
+                    'format' => 'uint16',
+                    'mark1CoverageOffset' => 'Offset16',
+                    'mark2CoverageOffset' => 'Offset16',
+                    'markClassCount' => 'uint16',
+                    'mark1ArrayOffset' => 'Offset16',
+                    'mark2ArrayOffset' => 'Offset16',
+                    'Mark2ArrayTable' => [
+                        'mark2Count' => 'uint16',
+                        'mark2Records' => [//[mark2Count]
+                            'mark2AnchorOffsets' => 'Offset16', //[markClassCount]
+                        ]
+                    ]
+                ],
+                'PosExtensionFormat1' => [
+                    'format' => 'uint16',
+                    'extensionLookupType' => 'uint16',
+                    'extensionOffset' => 'Offset32'
+                ],
+            ],
+            'AnchorFormat1' => [
+                'format' => 'uint16',
+                'xCoordinate' => 'int16',
+                'yCoordinate' => 'int16',
+            ],
+            'AnchorFormat2' => [
+                'format' => 'uint16',
+                'xCoordinate' => 'int16',
+                'yCoordinate' => 'int16',
+                'anchorPoint' => 'uint16',
+            ],
+            'AnchorFormat3' => [
+                'format' => 'uint16',
+                'xCoordinate' => 'int16',
+                'yCoordinate' => 'int16',
+                'xDeviceOffset' => 'Offset16',
+                'yDeviceOffset' => 'Offset16',
+            ],
+            'MarkArrayTable' => [
+                'markCount' => 'uint16',
+                'markRecords' => [//[markCount]
+                    'markClass' => 'uint16',
+                    'markAnchorOffset' => 'Offset16'
+                ]
+            ]
+        ],
     ];
-
+    public $requiredTables = ['head', 'maxp', 'loca', 'glyf', 'hmtx', 'cmap'];
+    public $optionalTables = ['hhea', 'vmtx', 'vhea', 'name', 'OS/2', 'post', 'GSUB', 'GPOS'];
     public $offset = [];
     public $directory = [];
     public $fontData = '';
     public $tables = [];
+    public function __construct($font)
+    {
+        $this->fontData = file_get_contents($font);
+    }
 
     public static function getFormat($format)
     {
         $f = [];
         foreach ($format as $n => $f) {
-            $f[] = "$f$n";
+            if (is_array($f)) {
+                $f = array_merge($f, self::getFormat($f));
+            } else {
+                $f[] = "$f$n";
+            }
         }
         return join('/', $f);
     }
