@@ -1,19 +1,59 @@
 <?php
+if(TTF::checkHostBigEndian()) {
+    define('Int16', 's');
+    define('Int32', 'l');
+    define('Int64', 'q');
+} else {
+    define('Int16', 'C2');
+    define('Int32', 'C4');
+    define('Int64', 'C8');
+}
 
+new TTF();
 class TTF
 {
-
+    public static $isHostBigEndian = true;
+    public static $shortInt = 's';
     public $offset = [];
     public $directory = [];
     public $fontData = '';
     public $requiredTable;
     public $optionalTable;
     public $otherTable;
-    public function __construct($font)
+    public function __construct($font = '')
     {
+        $this->test();
+        self::$isHostBigEndian = self::checkHostBigEndian();
+
         $this->fontData = file_get_contents($font);
     }
 
+    public function test()
+    {
+        var_dump(decbin(0xFAC1));
+        $n = hex2bin('FAC1');
+        var_dump($n);
+        var_dump(unpack('C2', $n));
+        var_dump(0xFA,0xC1);
+        exit;
+    }
+
+    public function setIntCode()
+    {
+        if(self::$isHostBigEndian) {
+            self::$shortInt = 's';
+        } else {
+
+        }
+    }
+
+    public static function checkHostBigEndian()
+    {
+        $int = FFI::new('unsigned int');
+        $int->cdata = 1;
+        $char = FFI::cast('char*', FFI::addr($int));
+        return !$char[0];
+    }
 
     public static function getFormat($format)
     {
@@ -95,21 +135,21 @@ class TTF
         'uint8' => 'C',
         'int8' => 'c',
         'uint16' => 'n',
-        'int16' => '',
-        'uint24' => 'nC',
+        'int16' => Int16,
+        'uint24' => 'C3',
         'uint32' => 'N',
-        'int32' => 'l',
+        'int32' => Int32,
         'Fixed' => 'c4',
-        'FWORD' => 's',
+        'FWORD' => Int16,
         'UFWORD' => 'n',
-        'F2DOT14' => 'c2',
-        'LONGDATETIME' => 'q', //1904-01-01 00:00:00 GMT/UTC
+        'F2DOT14' => '',//2bit . 14bit/16384
+        'LONGDATETIME' => Int64, //1904-01-01 00:00:00 GMT/UTC
         'Tag' => 'C4',
         'Offset8' => 'C',
         'Offset16' => 'n',
         'Offset24' => 'nC',
         'Offset32' => 'N',
-        'Version16Dot16' => 'c4',
+        'Version16Dot16' => '',
         'Tuple' => [
             'coordinates' => 'F2DOT14', //[axisCount]
         ],
