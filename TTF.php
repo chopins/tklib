@@ -4,9 +4,9 @@ if(TTF::checkHostBigEndian()) {
     define('Int32', 'l');
     define('Int64', 'q');
 } else {
-    define('Int16', 'C2');
-    define('Int32', 'C4');
-    define('Int64', 'C8');
+    define('Int16', '~C2');
+    define('Int32', '~C4');
+    define('Int64', '~C8');
 }
 
 new TTF();
