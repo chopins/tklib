@@ -6,13 +6,14 @@ class TTF
     public $offset = [];
     public $directory = [];
     public $fontData = '';
-    public $requiredTable = [];
-    public $optionalTable = [];
-    public $otherTable = [];
+    public $requiredTable;
+    public $optionalTable;
+    public $otherTable;
     public function __construct($font)
     {
         $this->fontData = file_get_contents($font);
     }
+
 
     public static function getFormat($format)
     {
@@ -20,10 +21,10 @@ class TTF
         foreach ($format as $n => $f) {
             if (is_array($f) && array_is_list($f)) {
                 $len = $f[1];
-                if(is_string($f[0])) {
+                if (is_string($f[0])) {
                     $f[] = "{$f[0]}{$len}$n";
                 } else {
-                    $f = array_merge($f, self::getFormat($f[0]));//处理数组问题
+                    $f = array_merge($f, self::getFormat($f[0])); //处理数组问题
                 }
             } elseif (is_array($f)) {
                 $f = array_merge($f, self::getFormat($f));
