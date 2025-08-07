@@ -2,12 +2,13 @@
 
 class TTF
 {
-    public $requiredTables = ['head', 'maxp', 'loca', 'glyf', 'hmtx', 'cmap'];
-    public $optionalTables = ['hhea', 'vmtx', 'vhea', 'name', 'OS/2', 'post', 'GSUB', 'GPOS'];
+
     public $offset = [];
     public $directory = [];
     public $fontData = '';
-    public $tables = [];
+    public $requiredTable = [];
+    public $optionalTable = [];
+    public $otherTable = [];
     public function __construct($font)
     {
         $this->fontData = file_get_contents($font);
@@ -17,7 +18,14 @@ class TTF
     {
         $f = [];
         foreach ($format as $n => $f) {
-            if (is_array($f)) {
+            if (is_array($f) && array_is_list($f)) {
+                if(is_string($f[0])) {
+                    $len = $f[1];
+                    $f[] = "{$f[0]}{$len}$n";
+                } else {
+                    $f = array_merge($f, self::getFormat($f[0]));
+                }
+            } elseif (is_array($f)) {
                 $f = array_merge($f, self::getFormat($f));
             } else {
                 $f[] = "$f$n";
@@ -57,8 +65,16 @@ class TTF
     public function getTables()
     {
         foreach ($this->directory as $table) {
-            $format = self::getFormat(self::tableFormat[$table['tag']]);
-            $this->tables[$table['tag']] = unpack($format, $this->fontData, $table['offset']);
+            $tag = $table['tag'];
+            $format = self::getFormat(self::tableFormat[$tag]);
+            $data = unpack($format, $this->fontData, $table['offset']);
+            if (in_array($tag, self::requiredTableTag)) {
+                $this->requiredTable[$tag] = $data;
+            } else if (in_array($tag, self::optionalTableTag)) {
+                $this->optionalTable[$tag] = $data;
+            } else {
+                $this->otherTable[$tag] = $data;
+            }
         }
     }
 
@@ -72,6 +88,8 @@ class TTF
         return $sum;
     }
 
+    public const requiredTableTag = ['head', 'maxp', 'loca', 'glyf', 'hmtx', 'cmap'];
+    public const optionalTableTag = ['hhea', 'vmtx', 'vhea', 'name', 'OS/2', 'post', 'GSUB', 'GPOS'];
     public const TYPE_FORMAT = [
         'uint8' => 'C',
         'int8' => 'c',
@@ -197,20 +215,20 @@ class TTF
                 'format' => 'uint16', //0
                 'length' => 'uint16',
                 'language' => 'uint16',
-                'glyphIdArray' => 'uint8', //[256]
+                'glyphIdArray' => ['uint8', 256], //[256]
             ],
             'SubtableFormat2' => [
                 'format' => 'uint16', //2
                 'length' => 'uint16',
                 'language' => 'uint16',
-                'subHeaderKeys' => 'uint16', //[256]
+                'subHeaderKeys' => ['uint16', 256], //[256]
                 'subHeaders' => [
                     'firstCode' => 'uint16',
                     'entryCount' => 'uint16',
                     'idDelta' => 'int16',
                     'idRangeOffset' => 'int16',
                 ],
-                'glyphIdArray' => 'uint16', //[]
+                'glyphIdArray' => ['uint16'], //[]
             ],
             'SubtableFormat4' => [
                 'format' => 'uint16', //4
@@ -220,12 +238,12 @@ class TTF
                 'searchRange' => 'uint16',
                 'entrySelector' => 'uint16',
                 'rangeShift' => 'uint16',
-                'endCode' => 'uint16', //endCode[segCount]
+                'endCode' => ['uint16', 'segCount'], //endCode[segCount]
                 'reservedPad' => 'uint16', //0
-                'startCode' => 'uint16', //startCode[segCount]
-                'idDelta' => 'int16', //idDelta[segCount]
+                'startCode' => ['uint16', 'segCount'], //startCode[segCount]
+                'idDelta' => ['int16', 'segCount'], //idDelta[segCount]
                 'idRangeOffset' => 'uint16',
-                'glyphIdArray' => 'uint16' //[]
+                'glyphIdArray' => ['uint16'] //[]
             ],
             'SubtableFormat6' => [
                 'format' => 'uint16', //6
@@ -233,19 +251,22 @@ class TTF
                 'language' => 'uint16',
                 'firstCode' => 'uint16',
                 'entryCount' => 'uint16',
-                'glyphIdArray' => 'uint16' //[entryCount]
+                'glyphIdArray' => ['uint16', 'entryCount'] //[entryCount]
             ],
             'SubtableFormat8' => [
                 'format' => 'uint16', //8
                 'reserved' => 'uint16', //0
                 'length' => 'uint32',
                 'language' => 'uint32',
-                'is32' => 'uint8', //[8192]
+                'is32' => ['uint8', 8192], //[8192]
                 'numGroups' => 'uint32',
                 'groups' => [ //[numGroups]
-                    'startCharCode' => 'uint32',
-                    'endCharCode' => 'uint32',
-                    'startGlyphID' => 'uint32'
+                    [
+                        'startCharCode' => 'uint32',
+                        'endCharCode' => 'uint32',
+                        'startGlyphID' => 'uint32',
+                    ],
+                    'numGroups'
                 ]
             ],
             'SubtableFormat10' => [
@@ -255,7 +276,7 @@ class TTF
                 'language' => 'uint32',
                 'startCharCode' => 'uint32',
                 'numChars' => 'uint32',
-                'glyphIdArray' => 'uint16', //[]
+                'glyphIdArray' => ['uint16'], //[]
             ],
             'SubtableFormat12' => [
                 'format' => 'uint16', //8
@@ -264,9 +285,12 @@ class TTF
                 'language' => 'uint32',
                 'numGroups' => 'uint32',
                 'groups' => [ //[numGroups]
-                    'startCharCode' => 'uint32',
-                    'endCharCode' => 'uint32',
-                    'startGlyphID' => 'uint32'
+                    [
+                        'startCharCode' => 'uint32',
+                        'endCharCode' => 'uint32',
+                        'startGlyphID' => 'uint32'
+                    ],
+                    'numGroups'
                 ]
             ],
             'SubtableFormat13' => [
@@ -276,9 +300,12 @@ class TTF
                 'language' => 'uint32',
                 'numGroups' => 'uint32',
                 'groups' => [ //[numGroups]
-                    'startCharCode' => 'uint32',
-                    'endCharCode' => 'uint32',
-                    'glyphID' => 'uint32'
+                    [
+                        'startCharCode' => 'uint32',
+                        'endCharCode' => 'uint32',
+                        'glyphID' => 'uint32'
+                    ],
+                    'numGroups'
                 ]
             ],
             'SubtableFormat14' => [
@@ -286,22 +313,31 @@ class TTF
                 'length' => 'uint32',
                 'numVarSelectorRecords' => 'uint32',
                 'varSelector' => [ //[numVarSelectorRecords]
-                    'varSelector' => 'uint24',
-                    'defaultUVSOffset' => 'Offset32',
-                    'nonDefaultUVSOffset' => 'Offset32'
+                    [
+                        'varSelector' => 'uint24',
+                        'defaultUVSOffset' => 'Offset32',
+                        'nonDefaultUVSOffset' => 'Offset32'
+                    ],
+                    'numVarSelectorRecords'
                 ],
                 'defaultUVSTable' => [
                     'numUnicodeValueRanges' => 'uint32',
                     'ranges' => [ //[numUnicodeValueRanges]
-                        'startUnicodeValue' => 'uint24',
-                        'additionalCount' => 'uint8',
+                        [
+                            'startUnicodeValue' => 'uint24',
+                            'additionalCount' => 'uint8',
+                        ],
+                        'numUnicodeValueRanges'
                     ]
                 ],
                 'nonDefaultUVStable' => [
                     'numUVSMappings' => 'uint32',
                     'uvsMappings' => [ //[numUVSMappings]
-                        'unicodeValue' => 'uint24',
-                        'glyphID' => 'uint16',
+                        [
+                            'unicodeValue' => 'uint24',
+                            'glyphID' => 'uint16',
+                        ],
+                        'numUVSMappings'
                     ]
                 ]
             ],
@@ -311,10 +347,10 @@ class TTF
         /**变长**/
         'loca' => [
             'shortFormat' => [
-                'offsets' => 'Offset16' //[numGlyphs + 1]
+                'offsets' => ['Offset16', 'numGlyphs + 1'] //[numGlyphs + 1]
             ],
             'longFormat' => [
-                'offsets' => 'Offset32' //[numGlyphs + 1]
+                'offsets' => ['Offset32', 'numGlyphs + 1'] //[numGlyphs + 1]
             ],
         ],
         /**变长**/
@@ -325,12 +361,12 @@ class TTF
                 'yMin' => 'int16',
                 'xMax' => 'int16',
                 'yMax' => 'int16',
-                'endPtsOfContours' => 'uint16',
+                'endPtsOfContours' => ['uint16', 'numberOfContours'],
                 'instructionLength' => 'uint16',
-                'instructions' => 'uint8', //[instructionLength]
-                'flags' => 'uint8', //[variable]
-                'XCoordinates' => 'uint8|int16', //[variable] 类型取决与 flags 是否设置 X_SHORT_VECTOR 与 X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR
-                'YCoordinates' => 'uint8|int16' //[variable]
+                'instructions' => ['uint8', 'instructionLength'], //[instructionLength]
+                'flags' => ['uint8', 'variable'], //[variable]
+                'XCoordinates' => ['uint8|int16',  'variable'], //[variable] 类型取决与 flags 是否设置 X_SHORT_VECTOR 与 X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR
+                'YCoordinates' => ['uint8|int16',  'variable'] //[variable]
             ],
             'complex' => [
                 'numberOfContours' => 'int16', //-1
@@ -348,10 +384,13 @@ class TTF
         /**变长**/
         'hmtx' => [
             'hMetrics' => [ //[numberOfHMetrics]
-                'advanceWidth' => 'UFWORD',
-                'lsb' => 'FWORD',
+                [
+                    'advanceWidth' => 'UFWORD',
+                    'lsb' => 'FWORD',
+                ],
+                'numberOfHMetrics'
             ],
-            'leftSideBearings' => 'FWORD' //[numGlyphs -numberOfHMetrics]
+            'leftSideBearings' => ['FWORD', 'numGlyphs - numberOfHMetrics'] //[numGlyphs -numberOfHMetrics]
         ],
         /**变长**/
         'name' => [
@@ -360,7 +399,8 @@ class TTF
                 'count' => 'uint16',
                 'storageOffset' => 'Offset16',
                 'nameRecord' => [ //[count]
-                    '(Variable)'
+                    '(Variable)',
+                    'count',
                 ]
             ],
             'version1' => [
@@ -368,17 +408,23 @@ class TTF
                 'count' => 'uint16',
                 'storageOffset' => 'Offset16',
                 'nameRecord' => [ //[count]
-                    'platformID' => 'uint16',
-                    'encodingID' => 'uint16',
-                    'languageID' => 'uint16',
-                    'nameID' => 'uint16',
-                    'length' => 'uint16',
-                    'stringOffset' => 'Offset16'
+                    [
+                        'platformID' => 'uint16',
+                        'encodingID' => 'uint16',
+                        'languageID' => 'uint16',
+                        'nameID' => 'uint16',
+                        'length' => 'uint16',
+                        'stringOffset' => 'Offset16'
+                    ],
+                    'count'
                 ],
                 'langTagCount' => 'uint16',
                 'langTagRecord' => [
-                    'length' => 'uint16',
-                    'langTagOffset' => 'Offset16'
+                    [
+                        'length' => 'uint16',
+                        'langTagOffset' => 'Offset16'
+                    ],
+                    'langTagCount'
                 ],
                 '(Variable)'
             ],
@@ -401,7 +447,7 @@ class TTF
             'yStrikeoutSize' => 'FWORD',
             'yStrikeoutPosition' => 'FWORD',
             'sFamilyClass' => 'int16',
-            'panose' => 'uint8', //[10]
+            'panose' => ['uint8', 10], //[10]
             'ulUnicodeRange1' => 'uint32',
             'ulUnicodeRange2' => 'uint32',
             'ulUnicodeRange3' => 'uint32',
@@ -437,8 +483,8 @@ class TTF
             'minMemType1' => 'uint32',
             'maxMemType1' => 'uint32',
             'numGlyphs' => 'uint16', //For version 2.0
-            'glyphNameIndex' => 'uint16', //numGlyphs] For version 2.0
-            'stringData' => 'uint8' //[variable]  For version 2.0
+            'glyphNameIndex' => ['uint16', 'numGlyphs'], //[numGlyphs] For version 2.0
+            'stringData' => ['uint8', 'variable'] //[variable]  For version 2.0
         ],
         'vhea' => [
             'majorVersion' => 'uint16',
@@ -466,9 +512,12 @@ class TTF
             'reserved' => 'uint32',
             'dataMapsCount' => 'uint32',
             'dataMaps' => [
-                'tag' => 'Tag',
-                'dataOffset' => 'Offset32',
-                'dataLength' => 'uint32'
+                [
+                    'tag' => 'Tag',
+                    'dataOffset' => 'Offset32',
+                    'dataLength' => 'uint32'
+                ],
+                'dataMapsCount'
             ]
         ],
         'cvar' => [
@@ -476,7 +525,7 @@ class TTF
             'minorVersion' => 'uint16',
             'tupleVariationCount' => 'uint16',
             'dataOffset' => 'Offset16',
-            'tupleVariationHeaders' => 'TupleVariationHeader',  //[tupleVariationCount]
+            'tupleVariationHeaders' => ['TupleVariationHeader', 'tupleVariationCount'],  //[tupleVariationCount]
         ],
         'avar' => [
             'majorVersion' => 'uint16',
@@ -484,37 +533,42 @@ class TTF
             'reserved' => 'uint16',
             'axisCount' => 'uint16',
             'axisSegmentMaps' => [ //[axisCount]
-                'positionMapCount' => 'uint16',
-                'axisValueMaps' => [ //[positionMapCount]
-                    'fromCoordinate' => 'F2DOT14',
-                    'toCoordinate'  => 'F2DOT14',
-                ]
+                [
+                    'positionMapCount' => 'uint16',
+                    'axisValueMaps' => [ //[positionMapCount]
+                        [
+                            'fromCoordinate' => 'F2DOT14',
+                            'toCoordinate'  => 'F2DOT14',
+                        ],
+                        'positionMapCount'
+                    ]
+                ],
+                'axisCount'
             ]
         ],
-        'cvt' => 'FWORD', //[n]
-        'fpgm' => 'uint8', //[n]
-        'prep' => 'uint8', //[n]
+        'cvt' => ['FWORD', 'n'], //[n]
+        'fpgm' => ['uint8', 'n'], //[n]
+        'prep' => ['uint8', 'n'], //[n]
         'sbix' => [
             'version' => 'uint16',
             'flags' => 'uint16',
             'numStrikes' => 'uint32',
-            'strikeOffsets' => 'Offset32', //[numStrikes]
+            'strikeOffsets' => ['Offset32', 'numStrikes'], //[numStrikes]
             'strike' => [
                 'ppem' => 'uint16',
                 'ppi' => 'uint16',
-                'glyphDataOffsets' => 'Offset32', //[numGlyphs+1]
+                'glyphDataOffsets' => ['Offset32', 'numGlyphs+1'], //[numGlyphs+1]
                 'glyph' => [
                     'originOffsetX' => 'int16',
                     'originOffsetY' => 'int16',
                     'graphicType' => 'Tag',
-                    'data' => 'uint8', //[]
+                    'data' => ['uint8'], //[]
                 ]
             ],
         ],
         'vmtx' => [
             'advanceHeight' => 'UFWORD',
-            'topSideBearing' => 'FWORD',
-            ''
+            'topSideBearing' => ['FWORD'],
         ],
         'kern' => [
             'version',
@@ -528,9 +582,12 @@ class TTF
                 'entrySelector' => 'uint16',
                 'rangeShift' => 'uint16',
                 'kernPairs' => [ //[nPairs]
-                    'left' => 'uint16',
-                    'right' => 'uint16',
-                    'value' => 'FWORD'
+                    [
+                        'left' => 'uint16',
+                        'right' => 'uint16',
+                        'value' => 'FWORD'
+                    ],
+                    'nPairs'
                 ]
             ],
             'Format2' => [
@@ -550,9 +607,12 @@ class TTF
             'numRecords' => 'uint16',
             'sizeDeviceRecord' => 'uint32',
             'records' => [ //[numRecords]
-                'pixelSize' => 'uint8',
-                'maxWidth' => 'uint8',
-                'widths' => 'uint8', //[numGlyphs]
+                [
+                    'pixelSize' => 'uint8',
+                    'maxWidth' => 'uint8',
+                    'widths' => ['uint8', 'numGlyphs'], //[numGlyphs]
+                ],
+                'numRecords'
             ]
         ],
         'gvar' => [
@@ -564,20 +624,23 @@ class TTF
             'glyphCount' => 'uint16',
             'flags' => 'uint16',
             'glyphVariationDataArrayOffset' => 'Offset32',
-            'glyphVariationDataOffsets' => 'Offset16|Offset32', //[glyphCount + 1]
-            'sharedTuples' => 'Tuple', //[sharedTupleCount]
+            'glyphVariationDataOffsets' => ['Offset16|Offset32', 'glyphCount + 1'], //[glyphCount + 1]
+            'sharedTuples' => ['Tuple', 'sharedTupleCount'], //[sharedTupleCount]
             'GlyphVariationData' => [
                 'tupleVariationCount' => 'uint16',
                 'dataOffset' => 'Offset16',
-                'tupleVariationHeaders' => 'TupleVariationHeader', //[tupleCount]
+                'tupleVariationHeaders' => ['TupleVariationHeader', 'tupleCount'], //[tupleCount]
             ]
         ],
         'gasp' => [
             'version' => 'uint16',
             'numRanges' => 'uint16',
             'gaspRanges' => [ //[numRanges]
-                'rangeMaxPPEM' => 'uint16',
-                'rangeGaspBehavior' => 'uint16'
+                [
+                    'rangeMaxPPEM' => 'uint16',
+                    'rangeGaspBehavior' => 'uint16'
+                ],
+                'numRanges'
             ]
         ],
         'GSUB' => [
@@ -604,7 +667,7 @@ class TTF
                     'format' => 'uint16',
                     'coverageOffset' => 'Offset16',
                     'glyphCount' => 'uint16',
-                    'substituteGlyphIDs' => 'uint16', //[glyphCount]
+                    'substituteGlyphIDs' => ['uint16', 'glyphCount'], //[glyphCount]
                 ],
                 'MultipleSubstFormat1' => [
                     'format' => 'uint16',
@@ -619,25 +682,25 @@ class TTF
                         'format' => 'uint16',
                         'coverageOffset' => 'Offset16',
                         'alternateSetCount' => 'uint16',
-                        'alternateSetOffsets' => 'Offset16', //[alternateSetCount]
+                        'alternateSetOffsets' => ['Offset16', 'alternateSetCount'], //[alternateSetCount]
                         'AlternateSetTable' => [
                             'glyphCount' => 'uint16',
-                            'alternateGlyphIDs' => 'uint16', //[glyphCount]
+                            'alternateGlyphIDs' => ['uint16', 'glyphCount'], //[glyphCount]
                         ]
                     ],
                     'LigatureSubstFormat1' => [
                         'format' => 'uint16',
                         'coverageOffset' => 'Offset16',
                         'ligatureSetCount' => 'uint16',
-                        'ligatureSetOffsets' => 'Offset16', //[ligatureSetCount]
+                        'ligatureSetOffsets' => ['Offset16', 'ligatureSetCount'], //[ligatureSetCount]
                         'LigatureSetTable' => [
                             'ligatureCount' => 'uint16',
-                            'ligatureOffsets' => 'Offset16', //[LigatureCount]
+                            'ligatureOffsets' => ['Offset16', 'LigatureCount'], //[LigatureCount]
                         ],
                         'LigatureTable' => [
                             'ligatureGlyph' => 'uint16',
                             'componentCount' => 'uint16',
-                            'componentGlyphIDs' => 'uint16', //[componentCount -1]
+                            'componentGlyphIDs' => ['uint16', 'componentCount -1'], //[componentCount -1]
                         ],
                         'SubstExtensionFormat1' => [
                             'format' => 'uint16',
@@ -648,11 +711,11 @@ class TTF
                             'format' => 'uint16',
                             'coverageOffset' => 'Offset16',
                             'backtrackGlyphCount' => 'uint16',
-                            'backtrackCoverageOffsets' => 'Offset16', //[backtrackGlyphCount]
+                            'backtrackCoverageOffsets' => ['Offset16', 'backtrackGlyphCount'], //[backtrackGlyphCount]
                             'lookaheadGlyphCount' => 'uint16',
-                            'lookaheadCoverageOffsets' => 'Offset16', //[lookaheadGlyphCount]
+                            'lookaheadCoverageOffsets' => ['Offset16', 'lookaheadGlyphCount'], //[lookaheadGlyphCount]
                             'glyphCount' => 'uint16',
-                            'substituteGlyphIDs' => 'uint16', //[glyphCount]
+                            'substituteGlyphIDs' => ['uint16', 'glyphCount'], //[glyphCount]
                         ],
                     ],
                 ]
@@ -684,7 +747,7 @@ class TTF
                     'coverageOffset' => 'Offset16',
                     'valueFormat' => 'uint16',
                     'valueCount' => 'uint16',
-                    'valueRecords' => 'ValueRecord' //[valueCount]
+                    'valueRecords' => ['ValueRecord', 'valueCount'] //[valueCount]
                 ],
                 'PairPosFormat1' => [
                     'format' => 'uint16',
@@ -696,9 +759,12 @@ class TTF
                     'PairSetTable' => [
                         'pairValueCount' => 'uint16',
                         'pairValueRecords' => [ //[pairValueCount]
-                            'secondGlyph' => 'uint16',
-                            'valueRecord1' => 'ValueRecord',
-                            'valueRecord2' => 'ValueRecord'
+                            [
+                                'secondGlyph' => 'uint16',
+                                'valueRecord1' => 'ValueRecord',
+                                'valueRecord2' => 'ValueRecord'
+                            ],
+                            'pairValueCount'
                         ],
                     ]
                 ],
@@ -712,10 +778,16 @@ class TTF
                     'class1Count' => 'uint16',
                     'class2Count' => 'uint16',
                     'class1Records' => [ //[class1Count]
-                        'class2Records' => [ //[class2Count]
-                            'valueRecord1' => 'ValueRecord',
-                            'valueRecord2' => 'ValueRecord'
-                        ]
+                        [
+                            'class2Records' => [ //[class2Count]
+                                [
+                                    'valueRecord1' => 'ValueRecord',
+                                    'valueRecord2' => 'ValueRecord'
+                                ],
+                                'class2Count'
+                            ],
+                        ],
+                        'class1Count'
                     ]
                 ],
                 'PairPosFormat2' => [
@@ -728,10 +800,16 @@ class TTF
                     'class1Count' => 'uint16',
                     'class2Count' => 'uint16',
                     'class1Records' => [ //[class1Count]
-                        'class2Records' => [ //[class2Count]
-                            'valueRecord1' => 'ValueRecord',
-                            'valueRecord2' => 'ValueRecord',
-                        ]
+                        [
+                            'class2Records' => [ //[class2Count]
+                                [
+                                    'valueRecord1' => 'ValueRecord',
+                                    'valueRecord2' => 'ValueRecord',
+                                ],
+                                'class2Count'
+                            ]
+                        ],
+                        'class1Count'
                     ]
                 ],
                 'CursivePosFormat1' => [
@@ -739,8 +817,11 @@ class TTF
                     'coverageOffset' => 'Offset16',
                     'entryExitCount' => 'uint16',
                     'entryExitRecords' => [ //[entryExitCount]
-                        'entryAnchorOffset' => 'Offset16',
-                        'exitAnchorOffset' => 'Offset16',
+                        [
+                            'entryAnchorOffset' => 'Offset16',
+                            'exitAnchorOffset' => 'Offset16',
+                        ],
+                        'entryExitCount'
                     ]
                 ],
                 'MarkBasePosFormat1' => [
@@ -753,7 +834,8 @@ class TTF
                     'BaseArrayTable' => [
                         'baseCount' => 'uint16',
                         'baseRecords' => [ //[baseCount]
-                            'baseAnchorOffsets' => 'Offset16', //[markClassCount]
+                            ['baseAnchorOffsets' => ['Offset16', 'markClassCount']], //[markClassCount]
+                            'baseCount'
                         ]
                     ]
                 ],
@@ -770,7 +852,10 @@ class TTF
                         'LigatureAttachTable' => [
                             'componentCount' => 'uint16',
                             'componentRecords' => [ //[componentCount]
-                                'ligatureAnchorOffsets' => 'Offset16' //[markClassCount]
+                                [
+                                    'ligatureAnchorOffsets' => ['Offset16', 'markClassCount'] //[markClassCount]
+                                ],
+                                'componentCount'
                             ]
                         ]
                     ]
@@ -785,7 +870,10 @@ class TTF
                     'Mark2ArrayTable' => [
                         'mark2Count' => 'uint16',
                         'mark2Records' => [ //[mark2Count]
-                            'mark2AnchorOffsets' => 'Offset16', //[markClassCount]
+                            [
+                                'mark2AnchorOffsets' => ['Offset16', 'markClassCount'], //[markClassCount]
+                            ],
+                            'mark2Count'
                         ]
                     ]
                 ],
@@ -816,8 +904,11 @@ class TTF
             'MarkArrayTable' => [
                 'markCount' => 'uint16',
                 'markRecords' => [ //[markCount]
-                    'markClass' => 'uint16',
-                    'markAnchorOffset' => 'Offset16'
+                    [
+                        'markClass' => 'uint16',
+                        'markAnchorOffset' => 'Offset16'
+                    ],
+                    'markCount'
                 ]
             ]
         ],
