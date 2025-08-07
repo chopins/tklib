@@ -19,11 +19,11 @@ class TTF
         $f = [];
         foreach ($format as $n => $f) {
             if (is_array($f) && array_is_list($f)) {
+                $len = $f[1];
                 if(is_string($f[0])) {
-                    $len = $f[1];
                     $f[] = "{$f[0]}{$len}$n";
                 } else {
-                    $f = array_merge($f, self::getFormat($f[0]));
+                    $f = array_merge($f, self::getFormat($f[0]));//处理数组问题
                 }
             } elseif (is_array($f)) {
                 $f = array_merge($f, self::getFormat($f));
