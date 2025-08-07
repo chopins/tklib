@@ -2,6 +2,76 @@
 
 class TTF
 {
+    public $requiredTables = ['head', 'maxp', 'loca', 'glyf', 'hmtx', 'cmap'];
+    public $optionalTables = ['hhea', 'vmtx', 'vhea', 'name', 'OS/2', 'post', 'GSUB', 'GPOS'];
+    public $offset = [];
+    public $directory = [];
+    public $fontData = '';
+    public $tables = [];
+    public function __construct($font)
+    {
+        $this->fontData = file_get_contents($font);
+    }
+
+    public static function getFormat($format)
+    {
+        $f = [];
+        foreach ($format as $n => $f) {
+            if (is_array($f)) {
+                $f = array_merge($f, self::getFormat($f));
+            } else {
+                $f[] = "$f$n";
+            }
+        }
+        return join('/', $f);
+    }
+    public function getOffsetTable()
+    {
+        $this->offset = unpack(self::getFormat(self::offsetTableFormat), $this->fontData);
+    }
+
+    public function getTimeSeconds($date)
+    {
+        $timezone = new DateTimeZone('UTC');
+        $start = (new DateTime('1904-01-01 00:00:00', $timezone))->getTimestamp();
+        $date = (new DateTime($date, $timezone))->getTimestamp();
+        return $date - $start;
+    }
+    public function nowTimeSeconds()
+    {
+        $timezone = new DateTimeZone('UTC');
+        $start = (new DateTime('1904-01-01 00:00:00', $timezone))->getTimestamp();
+        return time() - $start;
+    }
+
+    public function getTableDirectory()
+    {
+        $offset = 12;
+        $format = self::getFormat(self::tableDirectoryFormat);
+        for ($i = 0; $i < $this->offset['numTables']; $i++) {
+            $this->directory[] = unpack($format, $this->fontData, $offset);
+            $offset += 16;
+        }
+    }
+
+    public function getTables()
+    {
+        foreach ($this->directory as $table) {
+            $format = self::getFormat(self::tableFormat[$table['tag']]);
+            $this->tables[$table['tag']] = unpack($format, $this->fontData, $table['offset']);
+        }
+    }
+
+    public function calChecksum($tableStart, $tableLength)
+    {
+        $sum = 0;
+        $end = $tableStart + (($tableLength + 3) & ~3) / 4;
+        while ($tableStart < $end) {
+            $sum += $tableStart++;
+        }
+        return $sum;
+    }
+
     public const TYPE_FORMAT = [
         'uint8' => 'C',
         'int8' => 'c',
@@ -699,7 +769,7 @@ class TTF
                         'ligatureAttachOffsets' => 'Offset16',
                         'LigatureAttachTable' => [
                             'componentCount' => 'uint16',
-                            'componentRecords' => [//[componentCount]
+                            'componentRecords' => [ //[componentCount]
                                 'ligatureAnchorOffsets' => 'Offset16' //[markClassCount]
                             ]
                         ]
@@ -714,7 +784,7 @@ class TTF
                     'mark2ArrayOffset' => 'Offset16',
                     'Mark2ArrayTable' => [
                         'mark2Count' => 'uint16',
-                        'mark2Records' => [//[mark2Count]
+                        'mark2Records' => [ //[mark2Count]
                             'mark2AnchorOffsets' => 'Offset16', //[markClassCount]
                         ]
                     ]
@@ -745,80 +815,11 @@ class TTF
             ],
             'MarkArrayTable' => [
                 'markCount' => 'uint16',
-                'markRecords' => [//[markCount]
+                'markRecords' => [ //[markCount]
                     'markClass' => 'uint16',
                     'markAnchorOffset' => 'Offset16'
                 ]
             ]
         ],
     ];
-    public $requiredTables = ['head', 'maxp', 'loca', 'glyf', 'hmtx', 'cmap'];
-    public $optionalTables = ['hhea', 'vmtx', 'vhea', 'name', 'OS/2', 'post', 'GSUB', 'GPOS'];
-    public $offset = [];
-    public $directory = [];
-    public $fontData = '';
-    public $tables = [];
-    public function __construct($font)
-    {
-        $this->fontData = file_get_contents($font);
-    }
-
-    public static function getFormat($format)
-    {
-        $f = [];
-        foreach ($format as $n => $f) {
-            if (is_array($f)) {
-                $f = array_merge($f, self::getFormat($f));
-            } else {
-                $f[] = "$f$n";
-            }
-        }
-        return join('/', $f);
-    }
-    public function getOffsetTable()
-    {
-        $this->offset = unpack(self::getFormat(self::offsetTableFormat), $this->fontData);
-    }
-
-    public function getTimeSeconds($date)
-    {
-        $timezone = new DateTimeZone('UTC');
-        $start = (new DateTime('1904-01-01 00:00:00', $timezone))->getTimestamp();
-        $date = (new DateTime($date, $timezone))->getTimestamp();
-        return $date - $start;
-    }
-    public function nowTimeSeconds()
-    {
-        $timezone = new DateTimeZone('UTC');
-        $start = (new DateTime('1904-01-01 00:00:00', $timezone))->getTimestamp();
-        return time() - $start;
-    }
-
-    public function getTableDirectory()
-    {
-        $offset = 12;
-        $format = self::getFormat(self::tableDirectoryFormat);
-        for ($i = 0; $i < $this->offset['numTables']; $i++) {
-            $this->directory[] = unpack($format, $this->fontData, $offset);
-            $offset += 16;
-        }
-    }
-
-    public function getTables()
-    {
-        foreach ($this->directory as $table) {
-            $format = self::getFormat(self::tableFormat[$table['tag']]);
-            $this->tables[$table['tag']] = unpack($format, $this->fontData, $table['offset']);
-        }
-    }
-
-    public function calChecksum($tableStart, $tableLength)
-    {
-        $sum = 0;
-        $end = $tableStart + (($tableLength + 3) & ~3) / 4;
-        while ($tableStart < $end) {
-            $sum += $tableStart++;
-        }
-        return $sum;
-    }
 }
