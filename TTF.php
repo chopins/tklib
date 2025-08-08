@@ -22,7 +22,6 @@ class TTF
     public $otherTable;
     public function __construct($font = '')
     {
-        $this->test();
         self::$isHostBigEndian = self::checkHostBigEndian();
 
         $this->fontData = file_get_contents($font);
