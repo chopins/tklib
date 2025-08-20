@@ -50,17 +50,17 @@ function GET(string $path, string|array $query = '', string|array $data = '')
  *
  * @return HTTP
  */
-function PUT(string $path, string|array|CURLStringFile $file, string|array $query = '')
+function PUT(string $path, mixed $file, string|array $query = '')
 {
     $obj = HTTP::init();
-    if ($file instanceof CURLStringFile) {
-        $data = $file->data;
-    } else if (is_string($file) && file_exists($file)) {
-        $data = file_get_contents($file);
-    } else {
-        return $obj->custom('PUT', $path, $query, $file);
+    $type = gettype($file);
+    if(!in_array($type, ['string', 'array', 'resource'])) {
+        throw new TypeError("Argument #2 (\$file) must be of type string|array|resource, $type given");
     }
-    return $obj->put($path, $data, $query);
+    if (is_array($file)) {
+        $obj->custom('PUT', $path, $query, $file);
+    }
+    return $obj->put($path, $file, $query);
 }
 
 /**
@@ -176,6 +176,15 @@ class HTTP
      * @var array 请求头列表
      */
     public static array $requestHeader = [];
+
+    /**
+     * @var array 默认最前查询参数
+     */
+    public static array $defalutQueryArgs = [];
+    /**
+     * @var array 默认最前POST数据
+     */
+    public static array $defaultPostArgs = [];
 
     /**
      * @var string|HttpRequestBodyType 请求时发送的body数据类型
@@ -438,9 +447,18 @@ class HTTP
     private function buildUrl(string $path = '/', string|array $queryData = ''): void
     {
         $query = '';
-        if ($queryData) {
-            $query =  is_array($queryData) ? http_build_query($queryData) : $queryData;
-            $query = (strpos($path, '?') === false ? '?' : '&') . $query;
+        $realArgs = self::$defalutQueryArgs;
+        if ($queryData && is_string($queryData)) {
+            parse_str($queryData, $queryData);
+        } else if (!$queryData) {
+            $queryData = [];
+        }
+
+        $realArgs = array_merge($realArgs, $queryData);
+
+        if ($realArgs) {
+            $query =  http_build_query($realArgs);
+            $query = (str_ends_with($path, '?') === false ? '?' : '&') . $query;
         }
         if (strpos($path, '/') !== 0) {
             $path = "/$path";
@@ -453,6 +471,9 @@ class HTTP
     {
         if (is_string(self::$requestBodyType)) {
             HttpRequestBodyType::from(self::$requestBodyType);
+        }
+        if (is_array($data)) {
+            $data = array_merge(self::$defaultPostArgs, $data);
         }
 
         switch (self::$requestBodyType) {
@@ -477,7 +498,7 @@ class HTTP
         }
         $this->requestBody = $data;
     }
-    protected static function xmlEncode(array $data): void
+    protected static function xmlEncode(array $data): string
     {
         $xml = '<?xml version="1.0" encoding="UTF-8"?>';
         foreach ($data as $key => $v) {
@@ -486,6 +507,7 @@ class HTTP
             }
             $xml .= "<{$key}>{$v}</{$key}>";
         }
+        return $xml;
     }
     /**
      * @param string $method
@@ -522,7 +544,7 @@ class HTTP
         return $this->request();
     }
 
-    public function put(string $path, $file, string|array $query = ''): HTTP
+    public function put(string $path, mixed $file, string|array $query = ''): HTTP
     {
         $this->buildUrl($path, $query);
         $this->method = 'PUT';
@@ -695,8 +717,8 @@ class HTTP
                 CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE => 'HTTP/2'
             ];
             if (defined('CURL_HTTP_VERSION_3')) {
-                $ver[CURL_HTTP_VERSION_3] = 'HTTP/3';
-                $ver[CURL_HTTP_VERSION_3ONLY] = 'HTTP/3';
+                $ver[constant('CURL_HTTP_VERSION_3')] = 'HTTP/3';
+                $ver[constant('CURL_HTTP_VERSION_3ONLY')] = 'HTTP/3';
             }
             $this->httpVersion = $ver[$info['http_version']];
         }
@@ -893,11 +915,11 @@ class HTTP
         }
         if (self::$showResponseHeader) {
             $id = 'showResponseHeaderCollapse-' . self::$execCount;
-            if($this->httpCode >= 500) {
+            if ($this->httpCode >= 500) {
                 $color = 'danger';
-            } else if($this->httpCode >= 400) {
+            } else if ($this->httpCode >= 400) {
                 $color = 'warning';
-            } else if($this->httpCode < 300) {
+            } else if ($this->httpCode < 300) {
                 $color = 'success';
             } else {
                 $color = 'primary';
@@ -1052,7 +1074,7 @@ class HTTP
         if ($this->curl instanceof CurlHandle) {
             curl_close($this->curl);
         }
-        $msg = 'All('.HTTP::$execCount.') requested and shown' . PHP_EOL;
+        $msg = 'All(' . HTTP::$execCount . ') requested and shown' . PHP_EOL;
         if (!HTTP::$showCount) {
             $msg =  'Exec ' . HTTP::$execCount . ' request  and no  output data' . PHP_EOL;
         } else if (HTTP::$showCount != HTTP::$execCount) {
