@@ -890,7 +890,7 @@ class HTTP
             $id = 'showRequestHeaderCollapse-' . self::$execCount;
             echo <<<HTML
             <a href="#a-{$id}" class="btn btn-outline-primary dropdown-toggle" role="button" data-bs-toggle="collapse" data-bs-target="#{$id}" aria-expanded="false" aria-controls="{$id}" id="a-{$id}">实际请求头</a>
-            <div class="collapse" id="{$id}"><ul class="list-group">';
+            <div class="collapse" id="{$id}"><ul class="list-group">
             HTML;
             foreach ($this->realRequestHeader as $i => $header) {
                 if (!$header) {
