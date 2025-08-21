@@ -1015,7 +1015,7 @@ class HTTP
         return true;
     }
 
-    public function showArrayTable(Traversable $array): void
+    public function showArrayTable(Traversable|array $array): void
     {
         if (!self::$showArrayTable) {
             print_r($array);
