@@ -1343,7 +1343,7 @@ class HTTP
                 $(function() {
                     $('.responseContent').forEach(function(e) {
                         let type = e.getAttribute('content-type');
-                        let v = e.innerHTML;
+                        let v = e.innerHTML.trim();
                         let s = null;
                         if (type == 'json') {
                             s = d.createElement('code');
@@ -1362,11 +1362,16 @@ class HTTP
                             } catch (e) {
                                 s.innerHTML = v;
                             }
-                        } else {
+                        } else if(type == 'html') {
                             s = d.createElement('iframe');
                             s.width = "99%";
                             s.height = "900";
-                            s.srcdoc = '<pre>' + v.replaceAll('&lt;/script', '</script').replaceAll('&amp;', '&') + '</pre>';
+
+                            if(/^<!DOCTYPE|<html/i.test(v)) {
+                                s.srcdoc = v.replaceAll('&lt;/script', '</script').replaceAll('&amp;', '&');
+                            } else {
+                                s.srcdoc = '<pre>' + v.replaceAll('&lt;/script', '</script').replaceAll('&amp;', '&') + '</pre>';
+                            }
                         }
                         e.after(s);
                     });
