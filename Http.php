@@ -54,7 +54,7 @@ function PUT(string $path, mixed $file, string|array $query = '')
 {
     $obj = HTTP::init();
     $type = gettype($file);
-    if(!in_array($type, ['string', 'array', 'resource'])) {
+    if (!in_array($type, ['string', 'array', 'resource'])) {
         throw new TypeError("Argument #2 (\$file) must be of type string|array|resource, $type given");
     }
     if (is_array($file)) {
@@ -191,14 +191,14 @@ class HTTP
      */
     public static string|HttpRequestBodyType $requestBodyType;
     /**
-     * @var string 位于调用行时，激活执行的 token 值
+     * @var string 位于调用行时，激活执行的 token 值， 必须以 # 开头的单行代码注释
      */
-    private static string $runTag = '@';
+    private static string $runTag = '#run';
 
     /**
-     * @var string 位于调用行时，激活执行的并显示的 token 值
+     * @var string 位于调用行时，激活执行的并显示的 token 值, 必须是以 # 开头的单行代码注释
      */
-    private static string $runTagShow = '@';
+    private static string $runShowTag = '#runshow';
     /**
      * @var string 设置 User Agent
      */
@@ -400,7 +400,7 @@ class HTTP
     /**
      * @var array
      */
-    private static array $runFlagShowLines = [];
+    private static array $runShowFlagLines = [];
 
     /**
      * @var array
@@ -421,13 +421,13 @@ class HTTP
      *
      * @return HTTP
      */
-    public static function init(string $runTag = '', string $runTagShow = ''): HTTP
+    public static function init(string $runTag = '', string $runShowTag = ''): HTTP
     {
-        if ($runTag) {
+        if ($runTag && str_starts_with($runTag, '#')) {
             self::$runTag = $runTag;
         }
-        if ($runTagShow) {
-            self::$runTagShow = $runTagShow;
+        if ($runShowTag && str_starts_with($runShowTag, '#')) {
+            self::$runShowTag = $runShowTag;
         }
         if (!isset(self::$obj)) {
             self::$obj = new static();
@@ -961,16 +961,31 @@ class HTTP
         return $this;
     }
 
-    protected function checkRun(bool $parse = true): bool
+    protected function checkRun(bool $unparse = true): bool
     {
-        if ($parse) {
+        $funcName = ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE'];
+        if ($unparse) {
             if (self::$forceRun) {
                 return true;
             }
-            $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4);
-            $callline = $trace[3]['line'];
+            try {
+                throw new \Exception();
+            } catch(\Exception $e) {
+                $trace = $e->getTrace();
+            }
+            $callline = 0;
+            foreach($trace as $t) {
+                if(isset($t['function']) && in_array($t['function'], $funcName)) {
+                    $callline = $t['line'];
+                    break;
+                }
+            }
+            if(!$callline) {
+                return false;
+            }
+
             $this->enableShow = false;
-            if (in_array($callline, self::$runFlagShowLines)) {
+            if (in_array($callline, self::$runShowFlagLines)) {
                 $this->enableShow = true;
                 return true;
             }
@@ -980,40 +995,48 @@ class HTTP
             return false;
         }
 
-        $file = self::$scriptFile ? self::$scriptFile : $_SERVER['SCRIPT_FILENAME'];
-        $all = token_get_all(file_get_contents($file, false));
-        $cnt = count($all);
-        self::$runFlagLines = [];
-
-        for ($i = 0; $i < $cnt; $i++) {
-            $token = $all[$i];
-            $findTag = $findTagShow = false;
-            if ($token == self::$runTag || (is_array($token) && $token[1] == self::$runTag)) {
-                $findTag = true;
-            } elseif ($token == self::$runTagShow || (is_array($token) && $token[1] == self::$runTagShow)) {
-                $findTagShow = true;
+        $files = get_included_files();
+        foreach ($files as $f) {
+            if ($f == __FILE__) {
+                continue;
             }
-            $next = $i;
-            while ($findTag || $findTagShow) {
-                $next++;
-                if ($next >= $cnt) {
-                    break;
+            $tokens = token_get_all(file_get_contents($f, false));
+            $tokensCount = count($tokens);
+            for ($i = 0; $i < $tokensCount; $i++) {
+                $token = $tokens[$i];
+                $findRunTag = $findRunShowTag = false;
+                if (is_array($token) && $token[0] === T_COMMENT && $token[1] === self::$runShowTag) {
+                    $findRunShowTag = true;
+                    $line = $token[2];
+                } else if (is_array($token) && $token[0] == T_COMMENT && $token[1] == self::$runTag) {
+                    $findRunTag = true;
+                    $line = $token[2];
                 }
-                if (!is_array($all[$next]) && $all[$next] != '=') {
-                    break;
-                }
-                if ($all[$next][0] == T_STRING) {
-                    $findTag && self::$runFlagLines[] = $all[$next][2];
-                    $findTagShow && self::$runFlagShowLines[] = $all[$next][2];
-                    break;
-                } else if ($all[$next][0] != T_WHITESPACE) {
-                    break;
+
+                while ($findRunShowTag || $findRunTag) {
+                    $i++;
+                    $token = $tokens[$i];
+                    if (is_array($token) && $token[0] === T_WHITESPACE && str_ends_with($token[1], "\n")) {
+                        $line++;
+                        continue;
+                    }
+
+                    if (is_array($token) && $token[0] === T_STRING && in_array($token[1], $funcName) && $token[2] == $line) {
+                        if ($findRunShowTag) {
+                            self::$runShowFlagLines[] = $token[2];
+                        } else if ($findRunTag) {
+                            self::$runFlagLines[] = $token[2];
+                        }
+                        break;
+                    } elseif (is_array($token) && $token[2] == $line) {
+                        break;
+                    }
                 }
             }
         }
-
-        return true;
+        return false;
     }
+
 
     public function showArrayTable(Traversable|array $array): void
     {
@@ -1362,12 +1385,12 @@ class HTTP
                             } catch (e) {
                                 s.innerHTML = v;
                             }
-                        } else if(type == 'html') {
+                        } else if (type == 'html') {
                             s = d.createElement('iframe');
                             s.width = "99%";
                             s.height = "900";
 
-                            if(/^<!DOCTYPE|<html/i.test(v)) {
+                            if (/^<!DOCTYPE|<html/i.test(v)) {
                                 s.srcdoc = v.replaceAll('&lt;/script', '</script').replaceAll('&amp;', '&');
                             } else {
                                 s.srcdoc = '<pre>' + v.replaceAll('&lt;/script', '</script').replaceAll('&amp;', '&') + '</pre>';
