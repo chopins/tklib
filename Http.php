@@ -795,7 +795,7 @@ class HTTP
         }
         if ($nl && self::$isCLI) {
             echo PHP_EOL;
-        } else if (!self::$isCLI) {
+        } else if (!self::$isCLI && $nl) {
             echo '<br />';
         }
     }
@@ -898,9 +898,9 @@ class HTTP
                 }
                 echo '<li class="list-group-item">';
                 if (strpos($header, ':') === false && $header) {
-                    self::GREEN($header, true);
+                    self::GREEN($header);
                 } else {
-                    self::MAGENTA(str_replace(':', ':' . self::$colors['END'] . '<span>', $header), true);
+                    self::MAGENTA(str_replace(':', ':' . self::$colors['END'] . '<span>', $header));
                 }
                 echo '</li>';
             }
@@ -1016,8 +1016,10 @@ class HTTP
                 while ($findRunShowTag || $findRunTag) {
                     $i++;
                     $token = $tokens[$i];
-                    if (is_array($token) && $token[0] === T_WHITESPACE && str_ends_with($token[1], "\n")) {
+                    if (is_array($token) && $token[0] === T_WHITESPACE && trim($token[1]) === '' &&  strpos($token[1], "\n") !== false) {
                         $line++;
+                        continue;
+                    } else if(is_array($token) && $token[0] === T_WHITESPACE) {
                         continue;
                     }
 
@@ -1034,6 +1036,7 @@ class HTTP
                 }
             }
         }
+
         return false;
     }
 
@@ -1223,6 +1226,7 @@ class HTTP
                     letter-spacing: 1px;
                     white-space: pre;
                     margin-left: 2em;
+                    overflow: auto;
                 }
 
                 code button {
