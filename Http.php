@@ -770,12 +770,12 @@ class HTTP
         return $this;
     }
 
-    public function then(callable $callable): HTTP
+    public function then(callable $callable, ...$args): HTTP
     {
         if (!$this->run) {
             return $this;
         }
-        $callable($this);
+        $callable->call($this, ...$args);
         return $this;
     }
 
