@@ -746,6 +746,15 @@ class HTTP
             $this->isHtml = true;
         }
     }
+
+    public function getResposeJsonBody($associative = true)
+    {
+        if($this->isJson) {
+            return json_decode($this->responseBody, $associative);
+        }
+        return $this->responseBody;
+    }
+
     public static function isHave(string $hay, string $needle): bool
     {
         return stripos($hay, $needle) !== false;
@@ -1315,12 +1324,15 @@ class HTTP
                         t = t.slice(0, -5) + '</li>';
                         return '{<ul>' + t + '</ul></li><li><u>' + (idx++) + '</u>},';
                     } else if (typeof o == 'string') {
-                        o = o.replaceAll(/[\r\n\t]/img, function(m) {
+                        o = o.replaceAll(/[\r\n\t&]/img, function(m) {
                             let a = {
                                 "\r": '\\r',
                                 "\n": '\\n',
                                 "\t": '\\t'
                             };
+                            if(m == '&') {
+                                return '&amp;';
+                            }
                             return '<sub>' + a[m] + '</sub>';
                         });
                         return '<t>"' + o + '"</t>,';
