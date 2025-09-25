@@ -1356,7 +1356,16 @@ class HTTP
                 }
                 function toggleJsonBody(e) {
                     let ul = e.target.parentElement.querySelector('ul');
-                    ul.querySelectorAll('ul').forEach((ul, i) => (i > 0) && (ul.style.display = ul.style.display == 'block' ? 'none' : 'block'));
+                    let firstStatus = '';
+                    ul.querySelectorAll('ul').forEach((ul, i) => {
+                        if(i == 0) {
+                            return;
+                        } else if(i == 1) {
+                            firstStatus = ul.style.display = ul.style.display == 'block' ? 'none' : 'block'
+                        } else {
+                            ul.style.display = firstStatus;
+                        }
+                    });
                 }
 
                 function copyResponse(e) {
