@@ -147,11 +147,11 @@ class HTTP
     /**
      * @var array 网页显示时 bootstrap CSS 库文件，例如 bootstrap.min.css
      */
-    public static array $bootstrapCssLink = [];
+    public static array $bootstrapCssLink = ['https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css'];
     /**
      * @var array 网页显示时 bootstrap JS 库文件，例如 bootstrap.min.js
      */
-    public static array $bootstrapJsSrc = [];
+    public static array $bootstrapJsSrc = ['https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.min.js'];
     /**
      * @var string 用户名
      */
@@ -1354,6 +1354,10 @@ class HTTP
                     }
                     return t;
                 }
+                function toggleJsonBody(e) {
+                    let ul = e.target.parentElement.querySelector('ul');
+                    ul.querySelectorAll('ul').forEach((ul, i) => (i > 0) && (ul.style.display = ul.style.display == 'block' ? 'none' : 'block'));
+                }
 
                 function copyResponse(e) {
                     let obj = e.target;
@@ -1387,7 +1391,7 @@ class HTTP
                         if (type == 'json') {
                             s = d.createElement('code');
                             try {
-                                s.innerHTML = '<button class="btn btn-primary">复制</button><textarea></textarea></div><ul><u>' + (idx++) + '</u>' + jsonview(JSON.parse(v)) + '</ul>';
+                                s.innerHTML = '<button class="btn btn-primary">复制</button><textarea></textarea><button class="btn btn-success">显示/隐藏</button></div><ul><u>' + (idx++) + '</u>' + jsonview(JSON.parse(v)) + '</ul>';
                                 idx = 1;
                             } catch (e) {
                                 s.innerHTML = v;
@@ -1414,7 +1418,8 @@ class HTTP
                         }
                         e.after(s);
                     });
-                    $('code>button').forEach((b) => b.addEventListener('click', copyResponse));
+                    $('code>.btn-primary').forEach((b) => b.addEventListener('click', copyResponse));
+                    $('code>.btn-success').forEach((b) => b.addEventListener('click', toggleJsonBody));
                     $('u').forEach((c) => c.addEventListener('click', (e) => {
                         let ul = e.target.parentNode.querySelector('ul');
                         if (!ul) {
