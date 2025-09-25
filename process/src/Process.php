@@ -29,7 +29,7 @@ class Process
     protected $isQuit = false;
     protected $scheduleTable = [];
     protected $myChildProcess = [];
-    protected $argv = [];
+    protected CommandInput $argv;
     protected $parentPid = 0;
     public bool $shmIpc = false;
     public static $SHM_IPC_FLAG = 'P';
