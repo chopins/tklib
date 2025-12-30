@@ -50,8 +50,8 @@ function SHOW(callable $call, ...$params)
 }
 /**
  * @param string $path  请求的文件路径，不包括 scheme, host, port部分
- * @param string|array $data  请求时发送 Body 数据
- * @param string|array $query URL 查询参数
+ * @param string|string[] $data  请求时发送 Body 数据
+ * @param string|string[] $query URL 查询参数
  *
  * @return HTTP
  */
@@ -67,8 +67,8 @@ function GET(string $path, string|array $query = '', string|array $data = '')
 }
 /**
  * @param string $path   请求的文件路径，不包括 scheme, host, port部分
- * @param string|array|CURLStringFile $file 请求时发送 Body 数据
- * @param string|array $query URL 查询参数
+ * @param string|string[]|CURLStringFile $file 请求时发送 Body 数据
+ * @param string|string[] $query URL 查询参数
  *
  * @return HTTP
  */
@@ -87,8 +87,8 @@ function PUT(string $path, mixed $file, string|array $query = '')
 
 /**
  * @param string $path 请求的文件路径，不包括 scheme, host, port部分
- * @param string|array $data 请求时发送 Body 数据
- * @param string|array $query URL 查询参数
+ * @param string|string[] $data 请求时发送 Body 数据
+ * @param string|string[] $query URL 查询参数
  *
  * @return HTTP
  */
@@ -100,7 +100,7 @@ function POST(string $path, string|array $data = '', string|array $query = '')
 }
 /**
  * @param string $path 请求的文件路径，不包括 scheme, host, port部分
- * @param string|array $query URL 查询参数
+ * @param string|string[] $query URL 查询参数
  *
  * @return HTTP
  */
@@ -112,7 +112,7 @@ function DELETE(string $path, string|array $query = '')
 }
 /**
  * @param string $path 请求的文件路径，不包括 scheme, host, port部分
- * @param string|array $query URL 查询参数
+ * @param string|string[] $query URL 查询参数
  *
  * @return HTTP
  */
@@ -125,7 +125,7 @@ function HEAD(string $path, string|array $query = '')
 
 /**
  * @param string $path 请求的文件路径，不包括 scheme, host, port部分
- * @param string|array $query URL 查询参数
+ * @param string|string[] $query URL 查询参数
  *
  * @return HTTP
  */
@@ -138,7 +138,7 @@ function OPTIONS(string $path, string|array $query = '')
 
 /**
  * @param string $path 请求的文件路径，不包括 scheme, host, port部分
- * @param string|array $query URL 查询参数
+ * @param string|string[] $query URL 查询参数
  *
  * @return HTTP
  */
