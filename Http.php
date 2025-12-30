@@ -388,7 +388,7 @@ class HTTP
      * @var bool 是否调用请求
      */
     private bool $isrun = false;
-
+    private Response $response;
     /**
      * @var bool
      */
@@ -619,15 +619,25 @@ class HTTP
     /**
      * @param callable(...):Response $call
      */
-    public function show(callable $call, $params = [])
+    public function show(callable $call, $params = []):int
     {
         $this->isrun = $this->checkRun();
         if (!$this->isrun) {
             return $this;
         }
-        $resp = $call(...$params);
-        if(!$resp instanceof Response) {
-            throw new TypeError("callable must return Response object");
+        self::$execCount++;
+        try {
+            $this->response = $call(...$params);
+        } catch (Throwable $e) {
+            $type = explode(' ', $e->getMessage())[2];
+            $message = "TypeError: SHOW() Argument #1 callable(): Return value must be of type Response, $type returned" . PHP_EOL;
+            $message .= $e->getTraceAsString();
+            $resp = new Response(
+                500,
+                $message,
+                json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                HttpContentType::TEXT
+            );
         }
         $this->method = 'SHOW';
         $this->httpCode = $resp->httpCode;
@@ -803,7 +813,7 @@ class HTTP
         if ($needle instanceof HttpContentType) {
             $needle = $needle->value;
         }
-        if($hay instanceof HttpContentType) {
+        if ($hay instanceof HttpContentType) {
             $hay = $hay->value;
         }
         return stripos($hay, $needle) !== false;
