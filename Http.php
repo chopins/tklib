@@ -26,6 +26,11 @@ function RUN()
 {
     return HTTP::init()->run();
 }
+function SHOW($data, $code = 200) {
+    $obj = HTTP::init();
+    $obj->show($data, $code);
+    return $obj;
+}
 /**
  * @param string $path  请求的文件路径，不包括 scheme, host, port部分
  * @param string|array $data  请求时发送 Body 数据
@@ -365,7 +370,7 @@ class HTTP
     /**
      * @var bool 是否调用请求
      */
-    private bool $run = false;
+    private bool $isrun = false;
 
     /**
      * @var bool
@@ -439,6 +444,7 @@ class HTTP
 
     public function reset()
     {
+        self::$forceRun = false;
         foreach (self::$defaultObjVars as $k => $v) {
             $this->$k = $v;
         }
@@ -598,10 +604,40 @@ class HTTP
         return $this->request();
     }
 
+    public function show($data, $code)
+    {
+        $this->isrun = $this->checkRun();
+        if(!$this->isrun) {
+            return $this;
+        }
+
+        $this->method = 'SHOW';
+        $this->httpCode = $code;
+        if(is_callable($data)) {
+            try {
+                $this->httpCode = 1;
+                $this->responseBody = $data();
+            } catch(Throwable $e) {
+                $this->httpCode = 500;
+                $this->responseBody = $e->__toString();
+                $this->isText;
+            }
+        }
+
+        if(is_array($data)) {
+            $this->isJson = true;
+            $this->responseBody = json_encode($this->responseBody);
+        }
+        if ($this->enableShow) {
+            return $this->view();
+        }
+        return $this;
+    }
+
     protected function request(): HTTP
     {
-        $this->run = $this->checkRun();
-        if (!$this->run) {
+        $this->isrun = $this->checkRun();
+        if (!$this->isrun) {
             return $this;
         }
         self::$execCount++;
@@ -670,7 +706,7 @@ class HTTP
         }
 
         if ($this->enableShow) {
-            return $this->show();
+            return $this->view();
         }
         return $this;
     }
@@ -760,12 +796,12 @@ class HTTP
         return stripos($hay, $needle) !== false;
     }
 
-    public function show(): HTTP
+    public function view(): HTTP
     {
         if ($this->isShow) {
             return $this;
         }
-        if (!$this->run) {
+        if (!$this->isrun) {
             return $this;
         }
 
@@ -779,9 +815,13 @@ class HTTP
         return $this;
     }
 
+    /**
+     * @param callable $callable  Http::$callable(...)
+     * @param mixed ...$args
+     */
     public function then(callable $callable, ...$args): HTTP
     {
-        if (!$this->run) {
+        if (!$this->isrun) {
             return $this;
         }
         $callable->call($this, ...$args);
@@ -972,7 +1012,7 @@ class HTTP
 
     protected function checkRun(bool $unparse = true): bool
     {
-        $funcName = ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE'];
+        $funcName = ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'SHOW'];
         if ($unparse) {
             if (self::$forceRun) {
                 return true;
