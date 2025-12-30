@@ -12,23 +12,40 @@ declare(strict_types=1);
 /**
  * Http 请求 Body 数据类型
  */
-enum HttpRequestBodyType: string
+enum HttpContentType: string
 {
-    case JSON = 'json';
-    case XML = 'xml';
-    case RAW = 'raw';
-    case FORM_MULTIPART = 'form-multipart';
-    case FILE = 'file';
-    case FORM_URL = 'form-url';
+    case JSON = 'application/json';
+    case XML = 'application/xml';
+    case HTML = 'text/html';
+    case CSS = 'text/css';
+    case BIN = 'application/octet-stream';
+    case TEXT = 'text/plain';
+    case FORM_MULTIPART = 'multipart/form-data';
+    case BYTE_MULTIPART = 'multipart/byteranges';
+    case FILE = 'application/file';
+    case FORM_URL = 'application/x-www-form-urlencoded';
+}
+class Response
+{
+    public function __construct(
+        public readonly int $httpCode,
+        public readonly string $body,
+        public readonly string $url,
+        public readonly HttpContentType $contentType,
+    ) {}
 }
 
 function RUN()
 {
     return HTTP::init()->run();
 }
-function SHOW($data, $code = 200) {
+/**
+ * @param callable():Response $call
+ */
+function SHOW(callable $call, ...$params)
+{
     $obj = HTTP::init();
-    $obj->show($data, $code);
+    $obj->show($call, $params);
     return $obj;
 }
 /**
@@ -192,9 +209,9 @@ class HTTP
     public static array $defaultPostArgs = [];
 
     /**
-     * @var string|HttpRequestBodyType 请求时发送的body数据类型
+     * @var string|\HttpContentType 请求时发送的body数据类型
      */
-    public static string|HttpRequestBodyType $requestBodyType;
+    public static string|HttpContentType $requestBodyType;
     /**
      * @var string 位于调用行时，激活执行的 token 值， 必须以 # 开头的单行代码注释
      */
@@ -415,7 +432,7 @@ class HTTP
     private function __construct()
     {
         self::$isCLI = PHP_SAPI == 'cli';
-        self::$requestBodyType = HttpRequestBodyType::RAW;
+        self::$requestBodyType = HttpContentType::TEXT;
         $this->checkRun(false);
         self::$defaultObjVars = get_object_vars($this);
         $this->color();
@@ -476,31 +493,26 @@ class HTTP
     private function buildBody(string|array $data): void
     {
         if (is_string(self::$requestBodyType)) {
-            HttpRequestBodyType::from(self::$requestBodyType);
+            self::$requestBodyType = HttpContentType::from(self::$requestBodyType);
         }
         if (is_array($data)) {
             $data = array_merge(self::$defaultPostArgs, $data);
         }
 
         switch (self::$requestBodyType) {
-            case HttpRequestBodyType::JSON:
+            case HttpContentType::JSON:
                 $this->requestBody = is_array($data) ? json_encode($data) : $data;
-                self::$requestHeader['Content-Type'] = 'application/json';
                 return;
-            case HttpRequestBodyType::XML:
+            case HttpContentType::XML:
                 $this->requestBody = is_array($data) ? self::xmlEncode($data) : $data;
-                self::$requestHeader['Content-Type'] = 'application/xml';
                 return;
-            case HttpRequestBodyType::RAW:
-                self::$requestHeader['Content-Type'] = "text/plain";
-                break;
-            default:
-                foreach (self::$requestHeader as $i => $v) {
-                    if (strpos($v, 'Content-Type:') === 0) {
-                        unset(self::$requestHeader[$i]);
-                    }
-                }
-                break;
+        }
+        self::$requestHeader['Content-Type'] = self::$requestBodyType->value;
+
+        foreach (self::$requestHeader as $i => $v) {
+            if (strpos($v, 'Content-Type:') === 0) {
+                unset(self::$requestHeader[$i]);
+            }
         }
         $this->requestBody = $data;
     }
@@ -604,30 +616,25 @@ class HTTP
         return $this->request();
     }
 
-    public function show($data, $code)
+    /**
+     * @param callable(...):Response $call
+     */
+    public function show(callable $call, $params = [])
     {
         $this->isrun = $this->checkRun();
-        if(!$this->isrun) {
+        if (!$this->isrun) {
             return $this;
         }
-
+        $resp = $call(...$params);
+        if(!$resp instanceof Response) {
+            throw new TypeError("callable must return Response object");
+        }
         $this->method = 'SHOW';
-        $this->httpCode = $code;
-        if(is_callable($data)) {
-            try {
-                $this->httpCode = 1;
-                $this->responseBody = $data();
-            } catch(Throwable $e) {
-                $this->httpCode = 500;
-                $this->responseBody = $e->__toString();
-                $this->isText;
-            }
-        }
+        $this->httpCode = $resp->httpCode;
+        $this->url = $resp->url;
+        $this->responseBody = $resp->body;
+        $this->getResposeType($resp->contentType);
 
-        if(is_array($data)) {
-            $this->isJson = true;
-            $this->responseBody = json_encode($this->responseBody);
-        }
         if ($this->enableShow) {
             return $this->view();
         }
@@ -659,7 +666,7 @@ class HTTP
             $this->isCustomMethod = false;
         } else if ($this->method == 'GET') {
             $this->currentCurlOptions[CURLOPT_HTTPGET] = true;
-        } else if ($this->method == 'POST' && self::$requestBodyType == HttpRequestBodyType::FORM_URL) {
+        } else if ($this->method == 'POST' && self::$requestBodyType == HttpContentType::FORM_URL) {
             $this->currentCurlOptions[CURLOPT_POST] = true;
         } else if ($this->method == 'PUT') {
             $this->currentCurlOptions[CURLOPT_PUT] = true;
@@ -766,33 +773,39 @@ class HTTP
         $this->curlError = curl_error($this->curl);
     }
 
-    protected function getResposeType(string $header): void
+    protected function getResposeType(string|HttpContentType $header): void
     {
-        if (self::isHave($header, 'text/json') || self::isHave($header, 'application/json')) {
+        if (self::isHave($header, 'text/json') || self::isHave($header, HttpContentType::JSON)) {
             $this->isJson = true;
         } else if (
-            self::isHave($header, 'application/xml')
+            self::isHave($header, HttpContentType::XML)
             || self::isHave($header, 'text/xml')
             || self::isHave($header, 'application/atom+xml')
         ) {
             $this->isXml = true;
-        } else if (self::isHave($header, 'text/plain')) {
+        } else if (self::isHave($header, HttpContentType::TEXT)) {
             $this->isText = true;
-        } else if (self::isHave($header, 'text/html')) {
+        } else if (self::isHave($header, HttpContentType::HTML)) {
             $this->isHtml = true;
         }
     }
 
     public function getResposeJsonBody($associative = true)
     {
-        if($this->isJson) {
+        if ($this->isJson) {
             return json_decode($this->responseBody, $associative);
         }
         return $this->responseBody;
     }
 
-    public static function isHave(string $hay, string $needle): bool
+    public static function isHave(string|HttpContentType $hay, string|HttpContentType $needle): bool
     {
+        if ($needle instanceof HttpContentType) {
+            $needle = $needle->value;
+        }
+        if($hay instanceof HttpContentType) {
+            $hay = $hay->value;
+        }
         return stripos($hay, $needle) !== false;
     }
 
@@ -816,7 +829,7 @@ class HTTP
     }
 
     /**
-     * @param callable $callable  Http::$callable(...)
+     * @param HTTP::callable $callable
      * @param mixed ...$args
      */
     public function then(callable $callable, ...$args): HTTP
@@ -956,7 +969,7 @@ class HTTP
             echo '</ul></div>';
         }
         if (self::$showRequestBody) {
-            if (self::$requestBodyType == HttpRequestBodyType::JSON) {
+            if (self::$requestBodyType == HttpContentType::JSON) {
                 echo "<script class=\"responseContent\" type=\"text/plain\" content-type=\"json\">{$this->requestBody}</script>";
             } else {
                 echo '<code>' . (is_scalar($this->requestBody) ? $this->requestBody : print_r($this->requestBody, true)) . '</code>';
@@ -1019,17 +1032,17 @@ class HTTP
             }
             try {
                 throw new \Exception();
-            } catch(\Exception $e) {
+            } catch (\Exception $e) {
                 $trace = $e->getTrace();
             }
             $callline = 0;
-            foreach($trace as $t) {
-                if(isset($t['function']) && in_array($t['function'], $funcName)) {
+            foreach ($trace as $t) {
+                if (isset($t['function']) && in_array($t['function'], $funcName)) {
                     $callline = $t['line'];
                     break;
                 }
             }
-            if(!$callline) {
+            if (!$callline) {
                 return false;
             }
 
@@ -1068,7 +1081,7 @@ class HTTP
                     if (is_array($token) && $token[0] === T_WHITESPACE && trim($token[1]) === '' &&  strpos($token[1], "\n") !== false) {
                         $line++;
                         continue;
-                    } else if(is_array($token) && $token[0] === T_WHITESPACE) {
+                    } else if (is_array($token) && $token[0] === T_WHITESPACE) {
                         continue;
                     }
 
@@ -1370,7 +1383,7 @@ class HTTP
                                 "\n": '\\n',
                                 "\t": '\\t'
                             };
-                            if(m == '&') {
+                            if (m == '&') {
                                 return '&amp;';
                             }
                             return '<sub>' + a[m] + '</sub>';
@@ -1394,13 +1407,14 @@ class HTTP
                     }
                     return t;
                 }
+
                 function toggleJsonBody(e) {
                     let ul = e.target.parentElement.querySelector('ul');
                     let firstStatus = '';
                     ul.querySelectorAll('ul').forEach((ul, i) => {
-                        if(i == 0) {
+                        if (i == 0) {
                             return;
-                        } else if(i == 1) {
+                        } else if (i == 1) {
                             firstStatus = ul.style.display = ul.style.display == 'block' ? 'none' : 'block'
                         } else {
                             ul.style.display = firstStatus;
