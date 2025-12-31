@@ -619,7 +619,7 @@ class HTTP
     /**
      * @param callable(...):Response $call
      */
-    public function show(callable $call, $params = []):int
+    public function show(callable $call, $params = []): HTTP
     {
         $this->isrun = $this->checkRun();
         if (!$this->isrun) {
@@ -629,10 +629,14 @@ class HTTP
         try {
             $this->response = $call(...$params);
         } catch (Throwable $e) {
-            $type = explode(' ', $e->getMessage())[2];
-            $message = "TypeError: SHOW() Argument #1 callable(): Return value must be of type Response, $type returned" . PHP_EOL;
+            if($e instanceof TypeError) {
+                $type = explode(' ', $e->getMessage())[2];
+                $message = "TypeError: SHOW() Argument #1 callable(): Return value must be of type Response, $type returned" . PHP_EOL;
+            } else {
+                $message = $e->getMessage();
+            }
             $message .= $e->getTraceAsString();
-            $resp = new Response(
+            $this->response = new Response(
                 500,
                 $message,
                 json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -640,10 +644,10 @@ class HTTP
             );
         }
         $this->method = 'SHOW';
-        $this->httpCode = $resp->httpCode;
-        $this->url = $resp->url;
-        $this->responseBody = $resp->body;
-        $this->getResposeType($resp->contentType);
+        $this->httpCode = $this->response->httpCode;
+        $this->url = $this->response->url;
+        $this->responseBody = $this->response->body;
+        $this->getResposeType($this->response->contentType);
 
         if ($this->enableShow) {
             return $this->view();
