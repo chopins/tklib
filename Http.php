@@ -28,10 +28,10 @@ enum HttpContentType: string
 class Response
 {
     public function __construct(
-        public readonly int $httpCode,
-        public readonly string $body,
-        public readonly string $url,
-        public readonly HttpContentType $contentType,
+        public int $httpCode,
+        public string $body,
+        public string $url,
+        public HttpContentType $contentType,
     ) {}
 }
 
@@ -557,6 +557,9 @@ class HTTP
     {
         $this->buildUrl($path, $query);
         $this->method = 'POST';
+        if(is_string($data)) {
+            self::$requestBodyType = HttpContentType::FORM_URL;
+        }
         $this->buildBody($data);
         $this->currentCurlOptions[CURLOPT_POSTFIELDS] = $this->requestBody;
         return $this->request();
@@ -617,7 +620,7 @@ class HTTP
     }
 
     /**
-     * @param callable(...):Response $call
+     * @param Response $call
      */
     public function show(callable $call, $params = []): HTTP
     {
@@ -629,7 +632,7 @@ class HTTP
         try {
             $this->response = $call(...$params);
         } catch (Throwable $e) {
-            if($e instanceof TypeError) {
+            if ($e instanceof TypeError) {
                 $type = explode(' ', $e->getMessage())[2];
                 $message = "TypeError: SHOW() Argument #1 callable(): Return value must be of type Response, $type returned" . PHP_EOL;
             } else {
