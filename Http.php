@@ -611,6 +611,7 @@ class HTTP
                     $this->getSaveFileInfo(null, $h, $save, $notRange);
                 }
             }
+            $this->responseHeader = [];
         }
         $this->buildUrl($path, $query);
         $this->method = 'SAVE';
