@@ -638,8 +638,7 @@ class HTTP
                     }
                 }
                 if (!$fp) {
-                    $day = date('YmdHis');
-                    $fp = fopen(getcwd() . "/$save.$day", $mode);
+                    $fp = fopen(getcwd() . "/$save", $mode);
                 }
                 return fwrite($fp, $data);
             };
