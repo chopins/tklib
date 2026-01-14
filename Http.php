@@ -48,6 +48,12 @@ function SHOW(callable $call, ...$params)
     $obj->show($call, $params);
     return $obj;
 }
+function SAVE(string $path, string $save = '', string |array $query = '')
+{
+    $obj = HTTP::init();
+    $obj->save($path, $query, $save);
+    return $obj;
+}
 /**
  * @param string $path  请求的文件路径，不包括 scheme, host, port部分
  * @param string|string[] $data  请求时发送 Body 数据
@@ -553,11 +559,102 @@ class HTTP
         return $this->request();
     }
 
+    protected function getSaveFileInfo($ch, $h, &$save, &$notRange)
+    {
+        if (stripos($h, 'HTTP/') === 0) {
+            list(, $httpCode) = explode(' ', $h);
+            if ($httpCode == 200) {
+                $notRange = true;
+            } else if ($httpCode == 206) {
+                $notRange = false;
+            } else if ($ch && $httpCode == 416) {
+                $notRange = true;
+                curl_close($ch);
+                throw new RuntimeException("请求范围错误");
+            }
+        } else if (stripos($h, 'Accept-Ranges:') === 0) {
+            $notRange = false;
+        } else if (!$save && stripos($h, 'Content-Disposition:') == 0) {
+            strtok($h, ':');
+            $name = '';
+            do {
+                $v = trim(strtok(';'));
+                if (stripos($v, 'filename=') === 0) {
+                    list(, $name) = explode('=', $v);
+                    $name = trim($name, '"');
+                } else if (stripos($v, 'filename*=') === 0) {
+                    list(, $name) = explode('=', $v);
+                    $name = rawurldecode(explode('\'', $name)[2]);
+                    break;
+                }
+            } while ($v);
+            if ($name) {
+                $save = getcwd() . '/' . basename($name);
+            }
+        }
+    }
+
+    public function save(string $path, string|array $query = '', string $save = '')
+    {
+        if ($save && file_exists($save)) {
+            $size = filesize($save);
+            $this->currentCurlOptions[CURLOPT_RANGE] = "$size-";
+        } else {
+            $this->currentCurlOptions[CURLOPT_RANGE] = "0-";
+        }
+        $notRange = false;
+        if (!$save) {
+            $this->head($path, $query);
+            $headStatus = ($this->httpCode > 100 && $this->httpCode < 300);
+            if ($headStatus) {
+                foreach ($this->responseHeader as $h) {
+                    $this->getSaveFileInfo(null, $h, $save, $notRange);
+                }
+            }
+        }
+        $this->buildUrl($path, $query);
+        $this->method = 'SAVE';
+        if (!$headStatus) {
+            $this->currentCurlOptions[CURLOPT_HEADERFUNCTION] = function ($ch, $h) use (&$notRange, &$save) {
+                $this->getSaveFileInfo($ch, $h, $save, $notRange);
+                $this->responseHeader[] = $h;
+                return strlen($h);
+            };
+        }
+
+        try {
+            $this->currentCurlOptions[CURLOPT_WRITEFUNCTION] = function ($ch, string $data) use ($save, $notRange) {
+                static $fp = null;
+                $mode = $notRange ? 'wb+' : 'ab+';
+                if (!$save) {
+                    $save = getcwd() . '/' . basename(parse_url($this->url, PHP_URL_PATH));
+                }
+                if (!$notRange && file_exists($save) && $this->currentCurlOptions[CURLOPT_RANGE] == '0-') {
+                    $size = filesize($save);
+                    if ($size > 0) {
+                        curl_close($ch);
+                        throw new RuntimeException($save, 200206);
+                    }
+                }
+                if (!$fp) {
+                    $day = date('YmdHis');
+                    $fp = fopen(getcwd() . "/$save.$day", $mode);
+                }
+                return fwrite($fp, $data);
+            };
+            return $this->request();
+        } catch (RuntimeException $e) {
+            if ($e->getCode() == 200206) {
+                return $this->save($path, $query, $e->getMessage());
+            }
+        }
+    }
+
     public function post(string $path, string|array $data, string|array $query = ''): HTTP
     {
         $this->buildUrl($path, $query);
         $this->method = 'POST';
-        if(is_string($data)) {
+        if (is_string($data)) {
             self::$requestBodyType = HttpContentType::FORM_URL;
         }
         $this->buildBody($data);
@@ -678,6 +775,7 @@ class HTTP
             $this->currentCurlOptions[CURLOPT_PASSWORD] = self::$password;
             $this->currentCurlOptions[CURLOPT_HTTPAUTH] = CURLAUTH_ANY;
         }
+
         if ($this->isCustomMethod) {
             $this->currentCurlOptions[CURLOPT_CUSTOMREQUEST] = $this->method;
             $this->isCustomMethod = false;
@@ -687,15 +785,21 @@ class HTTP
             $this->currentCurlOptions[CURLOPT_POST] = true;
         } else if ($this->method == 'PUT') {
             $this->currentCurlOptions[CURLOPT_PUT] = true;
+        } else if ($this->method == 'SAVE') {
+            $this->currentCurlOptions[CURLOPT_HTTPGET] = true;
+            $this->currentCurlOptions[CURLOPT_HEADER] = false;
         }
         if (self::$showRequestHeader) {
             $this->currentCurlOptions[CURLINFO_HEADER_OUT] = 1;
         }
         $this->currentCurlOptions[CURLOPT_FOLLOWLOCATION] = true;
-        $this->currentCurlOptions[CURLOPT_HEADERFUNCTION] = function ($ch, $h) {
-            $this->responseHeader[] = $h;
-            return strlen($h);
-        };
+
+        if ($this->method != 'SAVE') {
+            $this->currentCurlOptions[CURLOPT_HEADERFUNCTION] = function ($ch, $h) {
+                $this->responseHeader[] = $h;
+                return strlen($h);
+            };
+        }
         self::$requestHeader = array_unique(self::$requestHeader);
         if (self::$requestHeader) {
             foreach (self::$requestHeader as $hk => $hv) {
