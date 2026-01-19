@@ -314,6 +314,7 @@ class HTTP
      * @var bool http 响应 body 是否 Text
      */
     public bool $isText = false;
+    public bool $isArray = false;
     /**
      * @var string http 响应的HTTP 版本
      */
@@ -908,6 +909,9 @@ class HTTP
             $this->isText = true;
         } else if (self::isHave($header, HttpContentType::HTML)) {
             $this->isHtml = true;
+        } else if (self::isHave($header, HttpContentType::FORM_URL)) {
+            $this->isArray = true;
+            parse_str($this->responseBody, $this->responseBody);
         }
     }
 
@@ -1023,6 +1027,8 @@ class HTTP
             } else if ($this->isXml) {
                 $xml = simplexml_load_string($this->responseBody);
                 $xml ? $this->showArrayTable($xml) : print($this->responseBody);
+            } else if ($this->isArray) {
+                var_export($this->responseBody);
             } else if ($this->responseContentLength <= 500 && $this->httpCode == 200) {
                 echo $this->responseBody;
             } else {
@@ -1129,13 +1135,14 @@ class HTTP
             echo '</div></div></div>';
             return;
         }
-        $contentType = $this->isJson ? 'json' : ($this->isXml ? 'xml' : 'html');
-        $content = $this->isJson ? $this->responseBody : str_ireplace(['&', '</script'], ['&amp;', '&lt;/script'], $this->responseBody);
-        echo <<<HTML
-        <script class="responseContent" type="text/plain" content-type="{$contentType}">{$content}</script>
-
-        </div></div></div>
-        HTML;
+        if ($this->isArray) {
+            highlight_string(var_export($this->responseBody, true));
+            echo '</div></div></div>';
+        } else {
+            $contentType = $this->isJson ? 'json' : ($this->isXml ? 'xml' : 'html');
+            $content = $this->isJson ? $this->responseBody : str_ireplace(['&', '</script'], ['&amp;', '&lt;/script'], $this->responseBody);
+            echo "<script class=\"responseContent\" type=\"text/plain\" content-type=\"{$contentType}\">{$content}</script></div></div></div>";
+        }
     }
 
     public function run(): HTTP
