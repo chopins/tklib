@@ -911,7 +911,8 @@ class HTTP
             $this->isHtml = true;
         } else if (self::isHave($header, HttpContentType::FORM_URL)) {
             $this->isArray = true;
-            parse_str($this->responseBody, $this->responseBody);
+            parse_str($this->responseBody, $result);
+            $this->responseBody = var_export($result, true);
         }
     }
 
@@ -1028,7 +1029,7 @@ class HTTP
                 $xml = simplexml_load_string($this->responseBody);
                 $xml ? $this->showArrayTable($xml) : print($this->responseBody);
             } else if ($this->isArray) {
-                var_export($this->responseBody);
+                echo $this->responseBody;
             } else if ($this->responseContentLength <= 500 && $this->httpCode == 200) {
                 echo $this->responseBody;
             } else {
@@ -1136,7 +1137,7 @@ class HTTP
             return;
         }
         if ($this->isArray) {
-            highlight_string(var_export($this->responseBody, true));
+            highlight_string('<?php ' . $this->responseBody . ';?>');
             echo '</div></div></div>';
         } else {
             $contentType = $this->isJson ? 'json' : ($this->isXml ? 'xml' : 'html');
