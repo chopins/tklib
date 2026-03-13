@@ -1155,6 +1155,7 @@ class HTTP
 
     protected function checkRun(bool $unparse = true): bool
     {
+        return $this->checkRunNew($unparse);
         $funcName = ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'SHOW', 'SAVE'];
         if ($unparse) {
             if (self::$forceRun) {
@@ -1231,6 +1232,81 @@ class HTTP
 
         return false;
     }
+
+    protected function checkRunNew(bool $unparse = true): bool
+    {
+        $funcName = ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'SHOW', 'SAVE'];
+        if ($unparse) {
+            if (self::$forceRun) {
+                return true;
+            }
+            try {
+                throw new \Exception();
+            } catch (\Exception $e) {
+                $trace = $e->getTrace();
+            }
+            $callline = 0;
+            foreach ($trace as $t) {
+                if (isset($t['function']) && in_array($t['function'], $funcName)) {
+                    $callline = $t['line'];
+                    break;
+                }
+            }
+            if (!$callline) {
+                return false;
+            }
+
+            $this->enableShow = false;
+            if (isset(self::$runShowFlagLines[$callline])) {
+                $this->enableShow = true;
+                unset(self::$runShowFlagLines[$callline]);
+                return true;
+            }
+            if (isset(self::$runFlagLines[$callline])) {
+                unset(self::$runFlagLines[$callline]);
+                return true;
+            }
+            return false;
+        }
+        $files = get_included_files();
+        foreach ($files as $f) {
+            if ($f == __FILE__) {
+                continue;
+            }
+            $tokens = token_get_all(file_get_contents($f, false));
+            $tokensCount = count($tokens);
+            $runFlagLines = $runShowFlagLines = 0;
+            for ($i = 0; $i < $tokensCount; $i++) {
+                $token = $tokens[$i];
+                if (!is_array($token)) {
+                    continue;
+                }
+                if (is_array($token) && $token[0] === T_COMMENT && $token[1] === self::$runShowTag) {
+                    $runShowFlagLines = $token[2];
+                } else if (is_array($token) && $token[0] == T_COMMENT && $token[1] == self::$runTag) {
+                    $runFlagLines = $token[2];
+                } else if (is_array($token) && $token[0] === T_STRING && in_array($token[1], $funcName)) {
+                    if(!$runFlagLines && !$runShowFlagLines) {
+                        continue;
+                    }
+                    if($runFlagLines + 1 != $token[2] && $runShowFlagLines + 1 != $token[2]) {
+                        $runFlagLines = 0;
+                        $runShowFlagLines = 0;
+                        continue;
+                    }
+                    if($runShowFlagLines) {
+                        self::$runShowFlagLines[$token[2]] = $i;
+                    } else if($runFlagLines) {
+                        self::$runFlagLines[$token[2]] = $i;
+                    }
+                    $runFlagLines = 0;
+                    $runShowFlagLines = 0;
+                }
+            }
+        }
+        return false;
+    }
+    public function parseToken($tokens, $i) {}
 
 
     public function showArrayTable(Traversable|array $array): void
