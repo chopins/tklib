@@ -154,6 +154,7 @@ function TRACE(string $path, string|array $query = '')
     $obj->trace($path, $query);
     return $obj;
 }
+
 /**
  * Http Request By curl
  */
@@ -1154,7 +1155,7 @@ class HTTP
 
     protected function checkRun(bool $unparse = true): bool
     {
-        $funcName = ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'SHOW'];
+        $funcName = ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'SHOW', 'SAVE'];
         if ($unparse) {
             if (self::$forceRun) {
                 return true;
