@@ -436,14 +436,23 @@ class HTTP
      * @var array
      */
     private static array $defaultObjVars = [];
+    private  static bool $isWebview = false;
 
     private function __construct()
     {
         self::$isCLI = PHP_SAPI == 'cli';
+        if (self::$isCLI && class_exists('webview')) {
+            self::$isWebview = true;
+            $this->outputWebview();
+        }
         self::$requestBodyType = HttpContentType::TEXT;
         $this->checkRun(false);
         self::$defaultObjVars = get_object_vars($this);
         $this->color();
+    }
+    private function outputWebview()
+    {
+        new webview('API', 'file://' . getcwd() . '/');
     }
 
     /**
@@ -945,7 +954,7 @@ class HTTP
             return $this;
         }
 
-        if (self::$isCLI) {
+        if (self::$isCLI && !self::$isWebview) {
             $this->showConsole();
         } else {
             $this->showHTML();
@@ -1045,7 +1054,7 @@ class HTTP
     {
         $ansi = isset($_SERVER['ComSpec']) && $_SERVER['ComSpec'] == 'C:\Windows\system32\cmd.exe' ? "\x1b" : "\033";
 
-        if (PHP_SAPI != 'cli') {
+        if (!self::$isCLI || self::$isWebview) {
             $code = ['BLUE' => 'blue', 'GREEN' => 'green', 'MAGENTA' => 'magenta', 'RED' => 'red', 'YELLOW' => 'yellow', 'PRESET' => 'unset'];
             self::$colors['END'] = "</span>";
             foreach ($code as $k => $n) {
@@ -1269,6 +1278,7 @@ class HTTP
             return false;
         }
         $files = get_included_files();
+
         foreach ($files as $f) {
             if ($f == __FILE__) {
                 continue;
@@ -1286,17 +1296,17 @@ class HTTP
                 } else if (is_array($token) && $token[0] == T_COMMENT && $token[1] == self::$runTag) {
                     $runFlagLines = $token[2];
                 } else if (is_array($token) && $token[0] === T_STRING && in_array($token[1], $funcName)) {
-                    if(!$runFlagLines && !$runShowFlagLines) {
+                    if (!$runFlagLines && !$runShowFlagLines) {
                         continue;
                     }
-                    if($runFlagLines + 1 != $token[2] && $runShowFlagLines + 1 != $token[2]) {
+                    if ($runFlagLines + 1 != $token[2] && $runShowFlagLines + 1 != $token[2]) {
                         $runFlagLines = 0;
                         $runShowFlagLines = 0;
                         continue;
                     }
-                    if($runShowFlagLines) {
+                    if ($runShowFlagLines) {
                         self::$runShowFlagLines[$token[2]] = $i;
-                    } else if($runFlagLines) {
+                    } else if ($runFlagLines) {
                         self::$runFlagLines[$token[2]] = $i;
                     }
                     $runFlagLines = 0;
@@ -1374,7 +1384,7 @@ class HTTP
         } else if (HTTP::$showCount != HTTP::$execCount) {
             $msg = 'Exec ' . HTTP::$execCount . ' request  and ' . HTTP::$showCount . ' show output' . PHP_EOL;
         }
-        if (!self::$isCLI) {
+        if (!self::$isCLI || self::$isWebview) {
             echo <<<HTML
             </div><div class="alert alert-success" role="alert">$msg</div>
             <div class="modal" tabindex="-1" id="PageLoad">
@@ -1401,7 +1411,7 @@ class HTTP
 
     public function htmlPage()
     {
-        if (PHP_SAPI == 'cli') {
+        if (PHP_SAPI == 'cli' && !self::$isWebview) {
             return;
         }
 ?>
