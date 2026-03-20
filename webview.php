@@ -26,16 +26,20 @@ class webview
     const WEBVIEW_EXIT = 1;
     const EXEC_EXIT = 2;
     const EXEC_RELOAD = 3;
+    const EXEC_REOPEN = 4;
+    private static $reloadAction;
+    private static $exitAction;
+    private static $reopenAciton;
 
-    public function __construct($title = '', $baseUrl = '')
+    public function __construct($argc, $argv = [])
     {
         define('EOF', pack('c', -1));
-        $this->title = $title;
-        $this->baseUrl = $baseUrl;
-        $this->process();
+        $this->title = 'php webview';
+        $this->baseUrl = 'file://' . getcwd() . '/';
+        $this->process($argc, $argv);
     }
 
-    public function process()
+    public function process($argc, $argv)
     {
         list($mainFp, $reportFp) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         list($viewFp, $outFp) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
@@ -46,7 +50,7 @@ class webview
                     $this->reportFp = $reportFp;
                     $this->main($viewFp);
                     fwrite($reportFp, self::WEBVIEW_EXIT);
-                    usleep(10000);
+                    usleep(1000);
                     exit;
                 }
             }
@@ -55,7 +59,7 @@ class webview
                 if ($this->epid === 0) {
                     register_shutdown_function(function () use ($reportFp) {
                         fwrite($reportFp, self::EXEC_EXIT);
-                        usleep(10000);
+                        usleep(1000);
                     });
                     ob_start(function ($buff, $pase) use ($outFp) {
                         fwrite($outFp, $buff);
@@ -66,7 +70,7 @@ class webview
                     return;
                 }
             }
-
+            $reopen = false;
             do {
                 $r = [$mainFp];
                 $w = $e = null;
@@ -78,16 +82,26 @@ class webview
                     } else if ($b == self::WEBVIEW_EXIT) {
                         pcntl_waitpid($this->wvpid, $status);
                         pcntl_waitpid($this->epid, $status);
+                        if($reopen) {
+                            return $this->reopen($argc, $argv);
+                        }
                         exit;
                     } else if ($b == self::EXEC_RELOAD) {
                         $this->epid = 0;
                         break;
+                    } else if($b == self::EXEC_REOPEN) {
+                        $reopen = true;
                     }
                 }
-                usleep(100000);
+                usleep(10000);
             } while (true);
         } while (true);
         exit;
+    }
+
+    public function reopen($argc, $argv)
+    {
+        pcntl_exec(PHP_BINARY, $argv, getenv());
     }
 
 
@@ -163,24 +177,42 @@ class webview
             $stockaction = $this->webkit->webkit_context_menu_item_get_stock_action($item);
             if ($stockaction == $this->webkit->WEBKIT_CONTEXT_MENU_ACTION_RELOAD) {
                 $this->webkit->webkit_context_menu_remove($menu, $item);
-                $action = $this->gio->g_simple_action_new('php-reload', null);
-                $this->g_signal_connect($action, 'activate', function () {
-                    fwrite($this->reportFp, self::EXEC_RELOAD);
-                });
-                $item = $this->webkit->webkit_context_menu_item_new_from_gaction($action, '重新载入', null);
-                $this->webkit->webkit_context_menu_append($menu, $item);
+                $itemRL = $this->webkit->webkit_context_menu_item_new_from_gaction(self::$reloadAction, '刷新页面', null);
+                $this->webkit->webkit_context_menu_append($menu, $itemRL);
             }
         }
+        $itemEX = $this->webkit->webkit_context_menu_item_new_from_gaction(self::$exitAction, '退出', null);
+        $this->webkit->webkit_context_menu_prepend($menu, $itemEX);
 
-        $action = $this->gio->g_simple_action_new('php-exit', null);
-        $this->g_signal_connect($action, 'activate', function ($action, $param, $app) {
+        $itemRO = $this->webkit->webkit_context_menu_item_new_from_gaction(self::$reopenAciton, '重新打开', null);
+        $this->webkit->webkit_context_menu_append($menu, $itemRO);
+        return null;
+    }
+
+    public function newPHPReopen()
+    {
+        self::$reopenAciton = $this->gio->g_simple_action_new('php-reopen', null);
+        $this->g_signal_connect(self::$reopenAciton, 'activate', function () {
+            fwrite($this->reportFp, self::EXEC_REOPEN);
+            $this->gio->g_action_activate(self::$exitAction, null);
+        });
+    }
+
+    public function newPHPReload()
+    {
+        self::$reloadAction = $this->gio->g_simple_action_new('php-reload', null);
+        $this->g_signal_connect(self::$reloadAction, 'activate', function () {
+            fwrite($this->reportFp, self::EXEC_RELOAD);
+        });
+    }
+
+    public function newExitAction($app)
+    {
+        self::$exitAction = $this->gio->g_simple_action_new('php-exit', null);
+        $this->g_signal_connect(self::$exitAction, 'activate', function ($action, $param, $app) {
             $this->gobject->g_signal_emit_by_name($this->webview, 'destroy');
             $this->gio->g_application_quit($app);
         }, $app);
-        $item = $this->webkit->webkit_context_menu_item_new_from_gaction($action, '退出', null);
-        $this->webkit->webkit_context_menu_prepend($menu, $item);
-
-        return null;
     }
 
     public function activate($app, $user_data)
@@ -192,16 +224,43 @@ class webview
 
         $scrolled_window = $this->gtk_scrolled_window_new();
         $this->gtk_scrolled_window_set_policy($scrolled_window, 1, 1);
-
+        $this->newExitAction($app);
+        $this->newPHPReload();
+        $this->newPHPReopen();
         // 创建 WebView
         $this->webview = $this->webkit->webkit_web_view_new();
         // 加载网页
         $this->webkit->webkit_web_view_load_html($this->webview, $this->html, $this->baseUrl);
+        $this->g_signal_connect($this->webview, 'decide-policy', $this->decidePolicy(...), null);
 
         $this->g_signal_connect($this->webview, 'context-menu', $this->webviewContextMenu(...), $app);
         $this->gtk_scrolled_window_set_child($scrolled_window, $this->webview);
         $this->gtk_window_set_child($window, $scrolled_window);
         $this->gtk_window_present($window);
+    }
+
+    public function decidePolicy($webview, $decision, $decision_type, $data)
+    {
+        if ($decision_type === null) {
+            $type = 0;
+        } else {
+            $type = $this->gobject->cast('int*', FFI::addr($decision_type))[0];
+        }
+        switch ($type) {
+            case 0: //WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION
+            case 1: //WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION
+                $action = $this->webkit->webkit_navigation_policy_decision_get_navigation_action($decision);
+                $actionType = $this->webkit->webkit_navigation_action_get_navigation_type($action);
+                if ($actionType == 3) { //WEBKIT_NAVIGATION_TYPE_RELOAD
+                    $this->webkit->webkit_policy_decision_ignore($decision);
+                    $this->gio->g_action_activate(self::$reloadAction, null);
+                    return true;
+                }
+                break;
+            case 2: //WEBKIT_POLICY_DECISION_TYPE_RESPONSE
+                break;
+        }
+        return 0;
     }
 
 
@@ -251,7 +310,7 @@ class webview
         $this->gobject = FFI::cdef(
             'typedef unsigned long gulong;
         typedef unsigned long gsize;
-        typedef int (*GCallback)(void *p1, void *p2, void *p3, void *p4);
+        typedef int (*GCallback)(void *p1, void *p2, void* p3, void *p4);
         typedef void (*GClosureNotify)(void *data, void *closure);
         void g_object_unref(void *object);
         void g_signal_handler_disconnect (void* instance,gulong handler_id);
@@ -278,6 +337,7 @@ class webview
             void* g_simple_action_new ( const char* name,const void* parameter_type);
             void g_application_hold (void* application);
             void g_application_release (void* application);
+            void g_action_activate (void* action, void* parameter);
             ',
             $lib[self::GIO]
         );
@@ -312,6 +372,9 @@ class webview
             void webkit_context_menu_append (void* menu,void* item);
             void webkit_context_menu_prepend(void* menu,void* item);
             void* webkit_context_menu_item_new_from_gaction (void* action,const char* label,void* target);
+            void* webkit_navigation_policy_decision_get_navigation_action (void* decision);
+            int webkit_navigation_action_get_navigation_type (void* navigation);
+            void webkit_policy_decision_ignore (void* decision);
 
             typedef enum {WEBKIT_CONTEXT_MENU_ACTION_NO_ACTION,WEBKIT_CONTEXT_MENU_ACTION_OPEN_LINK,WEBKIT_CONTEXT_MENU_ACTION_OPEN_LINK_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_LINK_TO_DISK,WEBKIT_CONTEXT_MENU_ACTION_COPY_LINK_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_OPEN_IMAGE_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_IMAGE_TO_DISK,WEBKIT_CONTEXT_MENU_ACTION_COPY_IMAGE_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_COPY_IMAGE_URL_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_OPEN_FRAME_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_GO_BACK,WEBKIT_CONTEXT_MENU_ACTION_GO_FORWARD,WEBKIT_CONTEXT_MENU_ACTION_STOP,WEBKIT_CONTEXT_MENU_ACTION_RELOAD,WEBKIT_CONTEXT_MENU_ACTION_COPY,WEBKIT_CONTEXT_MENU_ACTION_CUT,WEBKIT_CONTEXT_MENU_ACTION_PASTE,WEBKIT_CONTEXT_MENU_ACTION_DELETE,WEBKIT_CONTEXT_MENU_ACTION_SELECT_ALL,WEBKIT_CONTEXT_MENU_ACTION_INPUT_METHODS,WEBKIT_CONTEXT_MENU_ACTION_UNICODE,WEBKIT_CONTEXT_MENU_ACTION_SPELLING_GUESS,WEBKIT_CONTEXT_MENU_ACTION_NO_GUESSES_FOUND,WEBKIT_CONTEXT_MENU_ACTION_IGNORE_SPELLING,WEBKIT_CONTEXT_MENU_ACTION_LEARN_SPELLING,WEBKIT_CONTEXT_MENU_ACTION_IGNORE_GRAMMAR,WEBKIT_CONTEXT_MENU_ACTION_FONT_MENU,WEBKIT_CONTEXT_MENU_ACTION_BOLD,WEBKIT_CONTEXT_MENU_ACTION_ITALIC,WEBKIT_CONTEXT_MENU_ACTION_UNDERLINE,WEBKIT_CONTEXT_MENU_ACTION_OUTLINE,WEBKIT_CONTEXT_MENU_ACTION_INSPECT_ELEMENT,WEBKIT_CONTEXT_MENU_ACTION_OPEN_VIDEO_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_OPEN_AUDIO_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_COPY_VIDEO_LINK_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_COPY_AUDIO_LINK_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_TOGGLE_MEDIA_CONTROLS,WEBKIT_CONTEXT_MENU_ACTION_TOGGLE_MEDIA_LOOP,WEBKIT_CONTEXT_MENU_ACTION_ENTER_VIDEO_FULLSCREEN,WEBKIT_CONTEXT_MENU_ACTION_MEDIA_PLAY,WEBKIT_CONTEXT_MENU_ACTION_MEDIA_PAUSE,WEBKIT_CONTEXT_MENU_ACTION_MEDIA_MUTE,WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_VIDEO_TO_DISK,WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_AUDIO_TO_DISK,WEBKIT_CONTEXT_MENU_ACTION_INSERT_EMOJI,WEBKIT_CONTEXT_MENU_ACTION_PASTE_AS_PLAIN_TEXT,WEBKIT_CONTEXT_MENU_ACTION_CUSTOM} WebKitContextMenuAction;
             ',
@@ -324,3 +387,5 @@ class webview
         return $this->gtk->$name(...$arguments);
     }
 }
+
+new webview($argc, $argv);

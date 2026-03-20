@@ -166,6 +166,10 @@ class HTTP
     public static int $execCount = 0;
     public static bool $verbose = false;
     /**
+     * @var bool 是否使用webview显示输出
+     */
+    public  static bool $isWebview = false;
+    /**
      * @var int 当前显示的请求数量
      */
     public static int $showCount = 0;
@@ -436,23 +440,14 @@ class HTTP
      * @var array
      */
     private static array $defaultObjVars = [];
-    private  static bool $isWebview = false;
 
     private function __construct()
     {
         self::$isCLI = PHP_SAPI == 'cli';
-        if (self::$isCLI && class_exists('webview')) {
-            self::$isWebview = true;
-            $this->outputWebview();
-        }
         self::$requestBodyType = HttpContentType::TEXT;
         $this->checkRun(false);
         self::$defaultObjVars = get_object_vars($this);
         $this->color();
-    }
-    private function outputWebview()
-    {
-        new webview('API', 'file://' . getcwd() . '/');
     }
 
     /**
