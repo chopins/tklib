@@ -125,8 +125,11 @@ class webview
         $app = $this->gtk_application_new("com.example.webkitgtk", 0);
         $this->html = '<htm><body>wait load html</body></html>';
         $this->g_signal_connect($app, "activate", $this->activate(...));
-
-        $this->glib->g_idle_add(function ($app) use ($viewFp) {
+        $isShutdown = false;
+        $this->glib->g_idle_add(function ($app) use ($viewFp, &$isShutdown) {
+            if($isShutdown) {
+                return 0;
+            }
             $r = [$viewFp];
             $w = $e = null;
             $n = stream_select($r, $w, $e, 0, 1000);
@@ -146,8 +149,9 @@ class webview
             }
             return 1;
         }, $app);
-        $this->g_signal_connect($app, 'shutdown', function($app) {
-            $this->gio->g_application_quit($app);
+        $this->g_signal_connect($app, 'shutdown', function($app) use(&$isShutdown) {
+            $isShutdown = true;
+            //$this->gio->g_application_quit($app);
         });
         $status = $this->gio->g_application_run($app, 0, null);
 
