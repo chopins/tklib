@@ -127,7 +127,6 @@ class webview
         $this->g_signal_connect($app, "activate", $this->activate(...));
 
         $this->glib->g_idle_add(function ($app) use ($viewFp) {
-            $this->gio->g_application_hold($app);
             $r = [$viewFp];
             $w = $e = null;
             $n = stream_select($r, $w, $e, 0, 1000);
@@ -145,8 +144,6 @@ class webview
             } elseif ($d['state'] === PHP_OUTPUT_HANDLER_WRITE) {
                 $this->html .= stream_get_contents($r[0], $d['len']);
             }
-
-            $this->gio->g_application_release($app);
             return 1;
         }, $app);
         $this->gio->g_application_run($app, 0, null);
