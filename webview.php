@@ -100,7 +100,6 @@ class webview
     public function main($viewFp)
     {
         $this->initFFI();
-        $this->msg(__METHOD__);
         putenv("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1");
         putenv("WEBKIT_DISABLE_VBLANK_MONITOR=1");
         $app = $this->gtk_application_new("com.example.webkitgtk", 0);
@@ -155,7 +154,6 @@ class webview
 
     public function webviewContextMenu($webview, $menu, $hittest, $app)
     {
-        var_dump('context-menu');
         $length = $this->webkit->webkit_context_menu_get_n_items($menu);
         for ($i = 0; $i < $length; $i++) {
             $item = $this->webkit->webkit_context_menu_get_item_at_position($menu, $i);
