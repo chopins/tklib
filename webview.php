@@ -11,6 +11,7 @@ class webview
     private $gdk;
     private $wvpid = 0;
     private $epid = 0;
+    private $reportFp;
     public $html;
     public $title;
     public $baseUrl;
@@ -22,42 +23,69 @@ class webview
     const GLB = 'libglib-2';
     const GDK = 'libgdk-3';
     const GTK_LIBS = [self::GOBJECT => 'err', self::GIO => 'err', self::GTK => 'err', self::WEBKITGTK => 'err', self::GLB => 'err', self::GDK => 'err'];
-    static public $ins;
+    const WEBVIEW_EXIT = 1;
+    const EXEC_EXIT = 2;
+    const EXEC_RELOAD = 3;
+
     public function __construct($title = '', $baseUrl = '')
     {
-        $this->initFFI();
+        define('EOF', pack('c', -1));
         $this->title = $title;
         $this->baseUrl = $baseUrl;
-        self::$ins = $this;
         $this->process();
     }
 
     public function process()
     {
-        list($mc, $wc) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
-        list($ws, $es) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        list($mainFp, $reportFp) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        list($viewFp, $outFp) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         do {
             if ($this->wvpid === 0) {
                 $this->wvpid = pcntl_fork();
                 if ($this->wvpid === 0) {
-                    $this->main($wc, $ws);
+                    $this->reportFp = $reportFp;
+                    $this->main($viewFp);
+                    fwrite($reportFp, self::WEBVIEW_EXIT);
+                    usleep(10000);
                     exit;
                 }
             }
             if ($this->epid === 0) {
                 $this->epid = pcntl_fork();
                 if ($this->epid === 0) {
-                    ob_start($this->appendHtml(...));
+                    register_shutdown_function(function () use ($reportFp) {
+                        fwrite($reportFp, self::EXEC_EXIT);
+                        usleep(10000);
+                    });
+                    ob_start(function ($buff, $pase) use ($outFp) {
+                        fwrite($outFp, $buff);
+                        if ($pase & PHP_OUTPUT_HANDLER_FINAL) {
+                            fwrite($outFp, EOF);
+                        }
+                    });
                     return;
                 }
             }
 
-            $pid = pcntl_wait($status);
-            if ($pid == $this->wvpid) {
-                $this->wvpid = 0;
-            } elseif ($pid == $this->epid) {
-                $this->epid = -1;
-            }
+            do {
+                $r = [$mainFp];
+                $w = $e = null;
+                if (stream_select($r, $w, $e, 0, 100000) > 0) {
+                    $b = fread($r[0], 1);
+                    if ($b == self::EXEC_EXIT) {
+                        pcntl_waitpid($this->epid, $status);
+                        $this->epid = -1;
+                    } else if ($b == self::WEBVIEW_EXIT) {
+                        pcntl_waitpid($this->wvpid, $status);
+                        pcntl_waitpid($this->epid, $status);
+                        exit;
+                    } else if ($b == self::EXEC_RELOAD) {
+                        $this->epid = 0;
+                        break;
+                    }
+                }
+                usleep(100000);
+            } while (true);
         } while (true);
         exit;
     }
@@ -65,45 +93,46 @@ class webview
 
     public function msg($msg)
     {
-        fwrite(STDERR, "\n$msg\n");
+        $pid = posix_getpid();
+        fwrite(STDERR, "\n$pid : $msg\n");
     }
 
-    public function main()
+    public function main($viewFp)
     {
+        $this->initFFI();
         $this->msg(__METHOD__);
         putenv("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1");
         putenv("WEBKIT_DISABLE_VBLANK_MONITOR=1");
         $app = $this->gtk_application_new("com.example.webkitgtk", 0);
-
+        $this->html = '<htm><body>wait load html</body></html>';
         $this->g_signal_connect($app, "activate", $this->activate(...));
-        $this->g_signal_connect_after($app, "", $this->activate(...));
 
-        $status = $this->gio->g_application_run($app, 0, null);
-        $this->msg('app return');
-        $this->gobject->g_object_unref($app);
-        $completed = 0;
-        $context = $this->glib->g_main_context_default();
-        $this->glib->g_idle_add(function () use (&$completed) {
-            $completed = 1;
-            return false;
-        }, null);
-        while (!$completed) {
-            if ($this->glib->g_main_context_iteration($context, true)) {
-                break;
+        $this->glib->g_idle_add(function ($app) use ($viewFp) {
+            $html = '';
+            $this->gio->g_application_hold($app);
+            $r = [$viewFp];
+            $w = $e = null;
+            $n = stream_select($r, $w, $e, 0, 1000);
+            do {
+                if ($n <= 0) {
+                    break;
+                }
+                $c = fgetc($r[0]);
+                if ($c !== EOF) {
+                    $html .= $c;
+                } else {
+                    break;
+                }
+            } while ($c !== false);
+            if ($html) {
+                $this->webkit->webkit_web_view_load_html($this->webview, $html, $this->baseUrl);
             }
-        }
+            $this->gio->g_application_release($app);
+            return 1;
+        }, $app);
+        $status = $this->gio->g_application_run($app, 0, null);
+        $this->gobject->g_object_unref($app);
     }
-
-    public function __destruct()
-    {
-        $this->msg(__METHOD__);
-    }
-
-    public function shutdown()
-    {
-        $this->msg(__METHOD__);
-    }
-
 
     public function run($app)
     {
@@ -138,7 +167,7 @@ class webview
                 $this->webkit->webkit_context_menu_remove($menu, $item);
                 $action = $this->gio->g_simple_action_new('php-reload', null);
                 $this->g_signal_connect($action, 'activate', function () {
-                    var_dump("php reload");
+                    fwrite($this->reportFp, self::EXEC_RELOAD);
                 });
                 $item = $this->webkit->webkit_context_menu_item_new_from_gaction($action, '重新载入', null);
                 $this->webkit->webkit_context_menu_append($menu, $item);
@@ -177,13 +206,6 @@ class webview
         $this->gtk_window_present($window);
     }
 
-    public function appendHtml($html, $phase)
-    {
-        $this->html .= $html;
-        if ($phase & PHP_OUTPUT_HANDLER_FINAL) {
-
-        }
-    }
 
     public function loadhtml($html = '')
     {
@@ -256,6 +278,8 @@ class webview
             int g_variant_type_is_basic (const void* type);
             void g_simple_action_set_enabled (void* simple,int enabled);
             void* g_simple_action_new ( const char* name,const void* parameter_type);
+            void g_application_hold (void* application);
+            void g_application_release (void* application);
             ',
             $lib[self::GIO]
         );
