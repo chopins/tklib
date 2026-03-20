@@ -146,8 +146,14 @@ class webview
             }
             return 1;
         }, $app);
-        $this->gio->g_application_run($app, 0, null);
+        $this->g_signal_connect($app, 'shutdown', function($app) {
+            $this->gio->g_application_quit($app);
+        });
+        $status = $this->gio->g_application_run($app, 0, null);
+
         $this->gobject->g_object_unref($app);
+
+        return $status;
     }
 
     public function run($app)
