@@ -8,7 +8,6 @@ class webview
     private $webkit;
     private $webview;
     private $glib;
-    private $gdk;
     private $wvpid = 0;
     private $epid = 0;
     private $reportFp;
@@ -21,21 +20,23 @@ class webview
     const GTK = 'libgtk-4';
     const WEBKITGTK = 'libwebkitgtk-6';
     const GLB = 'libglib-2';
-    const GDK = 'libgdk-3';
-    const GTK_LIBS = [self::GOBJECT => 'err', self::GIO => 'err', self::GTK => 'err', self::WEBKITGTK => 'err', self::GLB => 'err', self::GDK => 'err'];
+    const GTK_LIBS = [self::GOBJECT => '2.0', self::GIO => '2.0', self::GTK => '4.0', self::WEBKITGTK => '6.0', self::GLB => '2.0'];
     const WEBVIEW_EXIT = 1;
     const EXEC_EXIT = 2;
     const EXEC_RELOAD = 3;
     const EXEC_REOPEN = 4;
+    public static $DL_PATH_LIST = [self::GOBJECT => '', self::GIO => '', self::GTK => '', self::WEBKITGTK => '', self::GLB => ''];
     private static $reloadAction;
     private static $exitAction;
     private static $reopenAciton;
 
     public function __construct($argc, $argv = [])
     {
-        define('EOF', pack('c', -1));
         $this->title = 'php webview';
         $this->baseUrl = 'file://' . getcwd() . '/';
+        if(!function_exists('pcntl_fork')) {
+            throw new RuntimeException('need php pcntl extension');
+        }
         $this->process($argc, $argv);
     }
 
@@ -62,7 +63,7 @@ class webview
                         usleep(1000);
                     });
                     ob_start(function ($buff, $pase) use ($outFp) {
-                        if($pase & PHP_OUTPUT_HANDLER_START) {
+                        if ($pase & PHP_OUTPUT_HANDLER_START) {
                             fwrite($outFp, pack('CJ', PHP_OUTPUT_HANDLER_START, 0));
                         }
                         $len = strlen($buff);
@@ -112,7 +113,7 @@ class webview
 
     public function msg($msg)
     {
-        $pid = posix_getpid();
+        $pid = getmypid();
         fwrite(STDERR, "\n$pid : $msg\n");
     }
 
@@ -138,9 +139,10 @@ class webview
             if ($d['state'] === PHP_OUTPUT_HANDLER_FINAL) {
                 $this->webkit->webkit_web_view_load_html($this->webview, $this->html, $this->baseUrl);
                 $this->html = '';
-            } if($d['state'] === PHP_OUTPUT_HANDLER_START) {
+            }
+            if ($d['state'] === PHP_OUTPUT_HANDLER_START) {
                 $this->html = '';
-            } elseif($d['state'] === PHP_OUTPUT_HANDLER_WRITE) {
+            } elseif ($d['state'] === PHP_OUTPUT_HANDLER_WRITE) {
                 $this->html .= stream_get_contents($r[0], $d['len']);
             }
 
@@ -287,6 +289,9 @@ class webview
 
     public function findDLL($name, $errmsg): string
     {
+        if (self::$DL_PATH_LIST[$name]) {
+            return self::$DL_PATH_LIST[$name];
+        }
         $output = [];
         exec("ldconfig -p |grep $name", $output, $code);
         if ($code != 0) {
@@ -324,11 +329,6 @@ class webview
         ',
             $lib[self::GOBJECT]
         );
-
-        // $this->gdk = FFI::cdef('typedef enum {GDK_DELETE,GDK_MOTION_NOTIFY,GDK_BUTTON_PRESS,GDK_BUTTON_RELEASE,GDK_KEY_PRESS,GDK_KEY_RELEASE,GDK_ENTER_NOTIFY,GDK_LEAVE_NOTIFY,GDK_FOCUS_CHANGE,GDK_PROXIMITY_IN,GDK_PROXIMITY_OUT,GDK_DRAG_ENTER,GDK_DRAG_LEAVE,GDK_DRAG_MOTION,GDK_DROP_START,GDK_SCROLL,GDK_GRAB_BROKEN,GDK_TOUCH_BEGIN,GDK_TOUCH_UPDATE,GDK_TOUCH_END,GDK_TOUCH_CANCEL,GDK_TOUCHPAD_SWIPE,GDK_TOUCHPAD_PINCH,GDK_PAD_BUTTON_PRESS,GDK_PAD_BUTTON_RELEASE,GDK_PAD_RING,GDK_PAD_STRIP,GDK_PAD_GROUP_MODE,GDK_TOUCHPAD_HOLD,GDK_PAD_DIAL,GDK_EVENT_LAST} GdkEventType;
-        // int gdk_event_get_event_type (const void* event);
-        // int gdk_event_get_button (const void* event,unsigned int* button);
-        // ', $lib[self::GDK]);
 
         $this->gio = FFI::cdef(
             'int g_application_run(void *application, int argc, char **argv);
