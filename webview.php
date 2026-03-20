@@ -62,9 +62,14 @@ class webview
                         usleep(1000);
                     });
                     ob_start(function ($buff, $pase) use ($outFp) {
-                        fwrite($outFp, $buff);
+                        if($pase & PHP_OUTPUT_HANDLER_START) {
+                            fwrite($outFp, pack('CJ', PHP_OUTPUT_HANDLER_START, 0));
+                        }
+                        $len = strlen($buff);
+                        $data = pack('CJ', PHP_OUTPUT_HANDLER_WRITE, $len) . $buff;
+                        fwrite($outFp, $data);
                         if ($pase & PHP_OUTPUT_HANDLER_FINAL) {
-                            fwrite($outFp, EOF);
+                            fwrite($outFp, pack('CJ', PHP_OUTPUT_HANDLER_FINAL, 0));
                         }
                     });
                     return;
@@ -82,14 +87,14 @@ class webview
                     } else if ($b == self::WEBVIEW_EXIT) {
                         pcntl_waitpid($this->wvpid, $status);
                         pcntl_waitpid($this->epid, $status);
-                        if($reopen) {
+                        if ($reopen) {
                             return $this->reopen($argc, $argv);
                         }
                         exit;
                     } else if ($b == self::EXEC_RELOAD) {
                         $this->epid = 0;
                         break;
-                    } else if($b == self::EXEC_REOPEN) {
+                    } else if ($b == self::EXEC_REOPEN) {
                         $reopen = true;
                     }
                 }
@@ -121,29 +126,28 @@ class webview
         $this->g_signal_connect($app, "activate", $this->activate(...));
 
         $this->glib->g_idle_add(function ($app) use ($viewFp) {
-            $html = '';
             $this->gio->g_application_hold($app);
             $r = [$viewFp];
             $w = $e = null;
             $n = stream_select($r, $w, $e, 0, 1000);
-            do {
-                if ($n <= 0) {
-                    break;
-                }
-                $c = fgetc($r[0]);
-                if ($c !== EOF) {
-                    $html .= $c;
-                } else {
-                    break;
-                }
-            } while ($c !== false);
-            if ($html) {
-                $this->webkit->webkit_web_view_load_html($this->webview, $html, $this->baseUrl);
+            if ($n <= 0) {
+                return 1;
             }
+            $c = fread($r[0], 9);
+            $d = unpack('Cstate/Jlen', $c);
+            if ($d['state'] === PHP_OUTPUT_HANDLER_FINAL) {
+                $this->webkit->webkit_web_view_load_html($this->webview, $this->html, $this->baseUrl);
+                $this->html = '';
+            } if($d['state'] === PHP_OUTPUT_HANDLER_START) {
+                $this->html = '';
+            } elseif($d['state'] === PHP_OUTPUT_HANDLER_WRITE) {
+                $this->html .= stream_get_contents($r[0], $d['len']);
+            }
+
             $this->gio->g_application_release($app);
             return 1;
         }, $app);
-        $status = $this->gio->g_application_run($app, 0, null);
+        $this->gio->g_application_run($app, 0, null);
         $this->gobject->g_object_unref($app);
     }
 
