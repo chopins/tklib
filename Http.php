@@ -514,19 +514,20 @@ class HTTP
         switch (self::$requestBodyType) {
             case HttpContentType::JSON:
                 $this->requestBody = is_array($data) ? json_encode($data) : $data;
-                return;
+                break;
             case HttpContentType::XML:
                 $this->requestBody = is_array($data) ? self::xmlEncode($data) : $data;
-                return;
+                break;
+            default:
+                $this->requestBody = $data;
+                break;
         }
         self::$requestHeader['Content-Type'] = self::$requestBodyType->value;
-
         foreach (self::$requestHeader as $i => $v) {
             if (strpos($v, 'Content-Type:') === 0) {
                 unset(self::$requestHeader[$i]);
             }
         }
-        $this->requestBody = $data;
     }
     protected static function xmlEncode(array $data): string
     {
@@ -1103,6 +1104,7 @@ class HTTP
         }
         if (self::$showRequestBody) {
             if (self::$requestBodyType == HttpContentType::JSON) {
+                var_dump($this->requestBody);
                 echo "<script class=\"responseContent\" type=\"text/plain\" content-type=\"json\">{$this->requestBody}</script>";
             } else {
                 echo '<code>' . (is_scalar($this->requestBody) ? $this->requestBody : print_r($this->requestBody, true)) . '</code>';
