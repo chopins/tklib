@@ -1104,7 +1104,6 @@ class HTTP
         }
         if (self::$showRequestBody) {
             if (self::$requestBodyType == HttpContentType::JSON) {
-                var_dump($this->requestBody);
                 echo "<script class=\"responseContent\" type=\"text/plain\" content-type=\"json\">{$this->requestBody}</script>";
             } else {
                 echo '<code>' . (is_scalar($this->requestBody) ? $this->requestBody : print_r($this->requestBody, true)) . '</code>';
