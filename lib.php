@@ -49,10 +49,7 @@ function strFind(string $content, $start, $end, $offset, &$findPos = 0)
  * @property-read int $contentLen
  * @property-read string $bakContent
  */
-class SmartStrPos extends SmartString
-{
-    
-}
+class SmartStrPos extends SmartString {}
 
 function smartStrPos(string $content, int $offset = 0)
 {
@@ -175,10 +172,7 @@ function isUpDomain($subDomain, $upDomain)
  * @property-read string $error
  * @property-read int $errCode
  */
-class Fetch extends SimpleCurl
-{
-    
-}
+class Fetch extends SimpleCurl {}
 
 /**
  * 使用Wget命令下载文件
@@ -266,21 +260,49 @@ function strEndPos($str, $needle)
     return Text::strEndPos($str, $needle);
 }
 
-class Csv extends CsvFile
-{
-    
-}
+class Csv extends CsvFile {}
 
 /**
  * 命令行下的多任务进度
  *
  * @param int $cur           当前任务已处理数据量
  * @param int $total         当前任务总数据量
- * @param int $totalTaskNum  总任务数    
+ * @param int $totalTaskNum  总任务数
  * @param int $taskIdx       当前任务索引数
  * @return void
  */
 function multitaskProgress($cur, $total, $totalTaskNum, $taskIdx)
 {
     return Console::multitaskProgress($cur, $total, $totalTaskNum, $taskIdx);
+}
+
+function getFdno($resource)
+{
+    static $ffi;
+    if(!is_resource($resource)) {
+        throw new TypeError('Epoll::getFdno() of paramter 1 must be resource');
+    }
+    if (!$ffi) {
+        $zend_long = \PHP_INT_SIZE == 8 ? 'int64_t' : 'int32_t';
+        $ffi = FFI::cdef("
+        typedef struct{void *res;uint32_t type_info;uint32_t num_args;} zval;
+        int zend_eval_string(const char *str, zval *retval_ptr, const char *string_name);
+        typedef struct _zend_resource {uint32_t gc[2];$zend_long handle;int type;void *ptr;} zend_resource;
+        typedef struct _php_stream  {const void *ops;void *abstract;} php_stream;
+        typedef struct {void *file;int fd;} php_stdio_stream_data;
+        typedef struct {int php_sock;} php_netstream_data;");
+    }
+    $zval = $ffi->new('zval', false);
+    $ffi->zend_eval_string('$resource;', FFI::addr($zval), __FILE__);
+    $res = $ffi->cast('zend_resource', $zval->res);
+    $stream = $ffi->cast('php_stream', $res->ptr);
+    $meta =  \stream_get_meta_data($resource);
+    if ($meta['stream_type'] == 'STDIO') {
+        $io = $ffi->cast('php_stdio_stream_data', $stream->abstract);
+        return $io->fd;
+    } elseif ($meta['stream_type'] == 'generic_socket' || strpos($meta['stream_type'], 'tcp_socket') === 0) {
+        $sock = $ffi->cast('php_netstream_data', $stream->abstract);
+        return $sock->php_sock;
+    }
+    return -1;
 }
