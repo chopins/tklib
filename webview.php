@@ -1,5 +1,8 @@
 <?php
 
+use Toknot\Epoll;
+
+include_once __DIR__ . '/autoload.php';
 class webview
 {
     private $gio;
@@ -8,12 +11,19 @@ class webview
     private $webkit;
     private $webview;
     private $glib;
+    private $cstd;
     private $wvpid = 0;
     private $epid = 0;
     private $reportFp;
     public $html;
     public $title;
-    public $baseUrl;
+    public $baseUrl = 'php://127.0.0.1';
+    public $execArgv = [];
+    private $requestDocumentRoot = '';
+    private $requestScriptFilename;
+    public $requestQueryString = '';
+    public $requestBody = '';
+    public $requestHeader = '';
     const GTK_WINDOW_TOPLEVEL = 0;
     const GIO = 'libgio-2';
     const GOBJECT = 'libgobject-2';
@@ -24,24 +34,37 @@ class webview
     const WEBVIEW_EXIT = 1;
     const EXEC_EXIT = 2;
     const EXEC_RELOAD = 3;
-    const EXEC_REOPEN = 4;
+    const EXEC_RESTART = 4;
+    const EXEC_NAVIGATION = 5;
     public static $DL_PATH_LIST = [self::GOBJECT => '', self::GIO => '', self::GTK => '', self::WEBKITGTK => '', self::GLB => ''];
     private static $reloadAction;
     private static $exitAction;
     private static $reopenAciton;
+    public static $fibers = [];
 
     public function __construct($argc, $argv = [])
     {
         $this->title = 'php webview';
-        $this->baseUrl = 'file://' . getcwd() . '/';
-        if(!function_exists('pcntl_fork')) {
+        $this->requestDocumentRoot = getcwd();
+        $this->baseUrl = 'php://127.0.0.1';
+        if (!function_exists('pcntl_fork')) {
             throw new RuntimeException('need php pcntl extension');
+        }
+        if (isset($argv[1])) {
+            $this->requestScriptFilename = realpath($argv[1]);
+            $this->execArgv = array_slice($argv, 2);
+            $this->requestDocumentRoot = dirname($this->requestScriptFilename);
         }
         $this->process($argc, $argv);
     }
 
     public function process($argc, $argv)
     {
+        $offset = PHP_VERSION_ID >= 80500 ? 512 : 488;
+        $this->cstd = FFI::cdef("int dup2(int oldfd, int newfd);
+        typedef struct {char offset[$offset]; void* current_execute_data;} zend_executor_globals;
+        zend_executor_globals executor_globals;
+        ");
         list($mainFp, $reportFp) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         list($viewFp, $outFp) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         do {
@@ -51,32 +74,20 @@ class webview
                     $this->reportFp = $reportFp;
                     $this->main($viewFp);
                     fwrite($reportFp, self::WEBVIEW_EXIT);
-                    usleep(1000);
+                    fclose($viewFp);
+                    fclose($reportFp);
+                    usleep(10000);
                     exit;
                 }
             }
             if ($this->epid === 0) {
                 $this->epid = pcntl_fork();
                 if ($this->epid === 0) {
-                    register_shutdown_function(function () use ($reportFp) {
-                        fwrite($reportFp, self::EXEC_EXIT);
-                        usleep(1000);
-                    });
-                    ob_start(function ($buff, $pase) use ($outFp) {
-                        if ($pase & PHP_OUTPUT_HANDLER_START) {
-                            fwrite($outFp, pack('CJ', PHP_OUTPUT_HANDLER_START, 0));
-                        }
-                        $len = strlen($buff);
-                        $data = pack('CJ', PHP_OUTPUT_HANDLER_WRITE, $len) . $buff;
-                        fwrite($outFp, $data);
-                        if ($pase & PHP_OUTPUT_HANDLER_FINAL) {
-                            fwrite($outFp, pack('CJ', PHP_OUTPUT_HANDLER_FINAL, 0));
-                        }
-                    });
+                    $this->oboutput($argv, $reportFp, $outFp);
                     return;
                 }
             }
-            $reopen = false;
+            $restart = false;
             do {
                 $r = [$mainFp];
                 $w = $e = null;
@@ -88,24 +99,53 @@ class webview
                     } else if ($b == self::WEBVIEW_EXIT) {
                         pcntl_waitpid($this->wvpid, $status);
                         pcntl_waitpid($this->epid, $status);
-                        if ($reopen) {
-                            return $this->reopen($argc, $argv);
+                        if ($restart) {
+                            return $this->restart($argv);
                         }
                         exit;
                     } else if ($b == self::EXEC_RELOAD) {
                         $this->epid = 0;
                         break;
-                    } else if ($b == self::EXEC_REOPEN) {
-                        $reopen = true;
+                    } else if ($b == self::EXEC_RESTART) {
+                        $restart = true;
+                    } else if ($b == self::EXEC_NAVIGATION) {
+                        $this->epid = 0;
+                        $len = unpack('Ip', fread($r[0], 4));
+                        if ($len['p'] > 0) {
+                            $this->requestScriptFilename = fread($r[0], $len['p']);
+                        }
+                        $qlen = unpack('Iq', fread($r[0], 4));
+                        if ($qlen['q'] > 0) {
+                            $this->requestQueryString = fread($r[0], $qlen['q']);
+                        }
+                        break;
                     }
                 }
                 usleep(10000);
             } while (true);
         } while (true);
-        exit;
+        exit(0);
     }
 
-    public function reopen($argc, $argv)
+    public function oboutput($argv, $reportFp, $outFp)
+    {
+        register_shutdown_function(function () use ($reportFp) {
+            fwrite($reportFp, self::EXEC_EXIT);
+            usleep(1000);
+        });
+
+
+        $fd = getFdno($outFp);
+        $r = $this->cstd->dup2($fd, getFdno(STDOUT));
+        if ($r < 0) {
+            throw new RuntimeException("Output Control Copy Error");
+        }
+        parse_str($this->requestQueryString, $_GET);
+        parse_str($this->requestBody, $_POST);
+        include_once $this->requestScriptFilename;
+    }
+
+    public function restart($argv)
     {
         pcntl_exec(PHP_BINARY, $argv, getenv());
     }
@@ -122,13 +162,18 @@ class webview
         $this->initFFI();
         putenv("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1");
         putenv("WEBKIT_DISABLE_VBLANK_MONITOR=1");
+        putenv("WEBKIT_FORCE_SANDBOX=0");
         $app = $this->gtk_application_new("com.example.webkitgtk", 0);
         $this->html = '<htm><body>wait load html</body></html>';
         $this->g_signal_connect($app, "activate", $this->activate(...));
         $isShutdown = false;
+        stream_set_blocking($viewFp, false);
         $this->glib->g_idle_add(function ($app) use ($viewFp, &$isShutdown) {
-            if($isShutdown) {
+            if ($isShutdown) {
                 return 0;
+            }
+            foreach (self::$fibers as $i => $fiber) {
+                $fiber->resume($i);
             }
             $r = [$viewFp];
             $w = $e = null;
@@ -136,27 +181,19 @@ class webview
             if ($n <= 0) {
                 return 1;
             }
-            $c = fread($r[0], 9);
-            $d = unpack('Cstate/Jlen', $c);
-            if ($d['state'] === PHP_OUTPUT_HANDLER_FINAL) {
-                $this->webkit->webkit_web_view_load_html($this->webview, $this->html, $this->baseUrl);
-                $this->html = '';
-            }
-            if ($d['state'] === PHP_OUTPUT_HANDLER_START) {
-                $this->html = '';
-            } elseif ($d['state'] === PHP_OUTPUT_HANDLER_WRITE) {
-                $this->html .= stream_get_contents($r[0], $d['len']);
-            }
+            $this->html = stream_get_contents($r[0]);
+            $this->webkit->webkit_web_view_load_html($this->webview, $this->html, $this->baseUrl);
             return 1;
         }, $app);
-        $this->g_signal_connect($app, 'shutdown', function($app) use(&$isShutdown) {
+        $this->g_signal_connect($app, 'shutdown', function ($app) use (&$isShutdown) {
             $isShutdown = true;
+            $this->gobject->g_object_unref(self::$exitAction);
+            $this->gobject->g_object_unref(self::$reloadAction);
+            $this->gobject->g_object_unref(self::$reopenAciton);
             //$this->gio->g_application_quit($app);
         });
         $status = $this->gio->g_application_run($app, 0, null);
-
         $this->gobject->g_object_unref($app);
-
         return $status;
     }
 
@@ -199,6 +236,8 @@ class webview
 
         $itemRO = $this->webkit->webkit_context_menu_item_new_from_gaction(self::$reopenAciton, '重新打开', null);
         $this->webkit->webkit_context_menu_append($menu, $itemRO);
+        $inspector = $this->webkit->webkit_web_view_get_inspector($webview);
+        $this->webkit->webkit_web_inspector_show($inspector);
         return null;
     }
 
@@ -206,7 +245,7 @@ class webview
     {
         self::$reopenAciton = $this->gio->g_simple_action_new('php-reopen', null);
         $this->g_signal_connect(self::$reopenAciton, 'activate', function () {
-            fwrite($this->reportFp, self::EXEC_REOPEN);
+            fwrite($this->reportFp, self::EXEC_RESTART);
             $this->gio->g_action_activate(self::$exitAction, null);
         });
     }
@@ -245,12 +284,135 @@ class webview
         // 加载网页
         $this->webkit->webkit_web_view_load_html($this->webview, $this->html, $this->baseUrl);
         $this->g_signal_connect($this->webview, 'decide-policy', $this->decidePolicy(...), null);
+        $webview_context = $this->webkit->webkit_web_context_get_default();
 
+        $this->webkit->webkit_web_context_register_uri_scheme($webview_context, "php", $this->php_scheme_request_cb(...), NULL, NULL);
+
+        $webview_setting = $this->webkit->webkit_web_view_get_settings($this->webview);
+        $this->gobject->g_object_set($webview_setting, "enable-developer-extras", TRUE, NULL);
+
+        // $this->webkit->webkit_settings_set_allow_universal_access_from_file_urls($webview_setting, TRUE);
+        // $this->webkit->webkit_settings_set_allow_file_access_from_file_urls($webview_setting, TRUE);
+        $this->g_signal_connect($this->webview, 'resource-load-started', $this->loadWebResouce(...));
         $this->g_signal_connect($this->webview, 'context-menu', $this->webviewContextMenu(...), $app);
         $this->gtk_scrolled_window_set_child($scrolled_window, $this->webview);
         $this->gtk_window_set_child($window, $scrolled_window);
         $this->gtk_window_present($window);
     }
+
+    public function loadphp($path, $query = '')
+    {
+        $path = $this->requestDocumentRoot . $path;
+        fwrite($this->reportFp, self::EXEC_NAVIGATION);
+        $len = pack('I', strlen($path));
+        fwrite($this->reportFp, $len . $path);
+        fwrite($this->reportFp, pack('I', strlen($query)) . $query);
+        return 'wait load';
+    }
+
+    public function loadWebResouce($webview, $resource, $request, $data)
+    {
+        // $this->g_signal_connect($resource, 'sent-request', function($resource, $request, $redirected_response) {
+        //     $uri = $this->webkit->webkit_uri_request_get_uri($request);
+        //     $this->msg('sent request:' . $uri);
+        //     return true;
+        // });
+        $uri = $this->webkit->webkit_uri_request_get_uri($request);
+        // $this->msg("LWR: $uri");
+        return true;
+    }
+
+    public function loadPHPResource($request, $contentType, $path, $requestQueryString = '', $requestBody = '')
+    {
+        $this->msg("load php $path $requestQueryString");
+
+        $fiber = new Fiber(function ($path, $requestQueryString = '', $requestBody = '') use ($request, $contentType) {
+            list($rFp, $outFp) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+            $pid = pcntl_fork();
+            if ($pid == 0) {
+                $fd = getFdno($outFp);
+                $r = $this->cstd->dup2($fd, getFdno(STDOUT));
+                if ($r < 0) {
+                    throw new RuntimeException("Output Control Copy Error");
+                }
+
+                parse_str($requestQueryString, $_GET);
+                parse_str($requestBody, $_POST);
+                // $org = $this->cstd->executor_globals->current_execute_data;
+                // $this->cstd->executor_globals->current_execute_data = null;
+                include_once $path;
+                // $this->cstd->executor_globals->current_execute_data = $org;
+                stream_socket_shutdown($outFp, STREAM_SHUT_RDWR);
+                exit;
+            }
+            do {
+                $epid = pcntl_waitpid($pid, $status, WNOHANG | WCONTINUED);
+                $idx = Fiber::suspend();
+            } while (!$epid);
+            unset(self::$fibers[$idx]);
+            $content = stream_get_contents($rFp);
+            fclose($rFp);
+            fclose($outFp);
+            $this->php_scheme_request_set_content($content, $request, $contentType);
+        });
+        self::$fibers[] = $fiber;
+        $fiber->start($path, $requestQueryString, $requestBody);
+    }
+
+    public function php_scheme_request_set_content($content, $request, $contentType)
+    {
+        $stream_len = strlen($content);
+        if ($stream_len < 1) {
+            $content = 'Content Empty';
+            $stream_len = strlen($content);
+        }
+        $str = $this->gio->new("char[$stream_len]", false);
+        FFI::memcpy($str, $content, $stream_len);
+        $content = $this->gio->cast("uint8_t[$stream_len]", $str);
+        $stream = $this->gio->g_memory_input_stream_new_from_data(FFI::addr($content[0]), $stream_len, fn() => FFI::free($content));
+        $this->webkit->webkit_uri_scheme_request_finish($request, $stream, $stream_len, $contentType);
+        $this->gobject->g_object_unref($stream);
+    }
+
+    public function php_scheme_request_cb($request, $data)
+    {
+        $uri = $this->webkit->webkit_uri_scheme_request_get_uri($request);
+        $path = $this->webkit->webkit_uri_scheme_request_get_path($request);
+        $method = $this->webkit->webkit_uri_scheme_request_get_http_method($request);
+        $hdrs = $this->webkit->webkit_uri_scheme_request_get_http_headers($request);
+        if ($method == 'POST') {
+            $contentLen = $this->webkit->soup_message_headers_get_content_length($hdrs);
+            if ($contentLen) {
+                $stream = $this->webkit->webkit_uri_scheme_request_get_http_body($request);
+            }
+        }
+        //$this->msg("PSRCB: $uri");
+        $uris = parse_url($uri);
+        $path = stripslashes(urldecode($path));
+        if (str_starts_with($path, '/".')) {
+            $path = substr($path, 3, -1);
+        }
+        $realpath = $this->requestDocumentRoot . $path;
+        $type = mime_content_type($realpath);
+        $isTxt = str_starts_with($type, 'text/');
+        $ext = pathinfo($realpath, PATHINFO_EXTENSION);
+        $contentType = 'text/html';
+        if ($ext == 'php') {
+            $this->loadPHPResource($request, $contentType, $realpath, $uris['query']);
+        } else {
+            if ($isTxt && $ext == 'js') {
+                $contentType = 'text/javascript';
+            } else if ($isTxt && $ext == 'css') {
+                $contentType = 'text/css';
+            } else {
+                $contentType = $type;
+            }
+            $content = file_get_contents($realpath);
+            $this->php_scheme_request_set_content($content, $request, $contentType);
+        }
+    }
+
+
 
     public function decidePolicy($webview, $decision, $decision_type, $data)
     {
@@ -259,21 +421,60 @@ class webview
         } else {
             $type = $this->gobject->cast('int*', FFI::addr($decision_type))[0];
         }
+        $this->msg("type: $type");
         switch ($type) {
             case 0: //WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION
             case 1: //WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION
                 $action = $this->webkit->webkit_navigation_policy_decision_get_navigation_action($decision);
                 $actionType = $this->webkit->webkit_navigation_action_get_navigation_type($action);
-                if ($actionType == 3) { //WEBKIT_NAVIGATION_TYPE_RELOAD
-                    $this->webkit->webkit_policy_decision_ignore($decision);
-                    $this->gio->g_action_activate(self::$reloadAction, null);
-                    return true;
+                $this->msg('nav|window: action:' . $actionType);
+                $request = $this->webkit->webkit_navigation_action_get_request($action);
+                $uri = $this->webkit->webkit_uri_request_get_uri($request);
+                $this->msg('nav:' . $uri);
+                switch ($actionType) {
+                    case 3:  //WEBKIT_NAVIGATION_TYPE_RELOAD
+                        $this->webkit->webkit_policy_decision_ignore($decision);
+                        $this->gio->g_action_activate(self::$reloadAction, null);
+                        return true;
+                    case 0: //WEBKIT_NAVIGATION_TYPE_LINK_CLICKED
+                        if (strpos($uri, $this->baseUrl) !== false) {
+                            $path = substr($uri, strlen($this->baseUrl));
+                            if ($path[0] == '#') {
+                                return true;
+                            }
+                        }
+                        $urls = parse_url($uri);
+                        if (is_dir($urls['path'])) {
+                            $urls['path'] .= 'index.php';
+                        }
+                        $this->loadphp($urls['path'], $urls['query']);
+                        $this->webkit->webkit_policy_decision_ignore($decision);
+                        return true;
+                    case 1: //WEBKIT_NAVIGATION_TYPE_FORM_SUBMITTED
+                    case 2: //WEBKIT_NAVIGATION_TYPE_BACK_FORWARD
+                    case 4: //WEBKIT_NAVIGATION_TYPE_FORM_RESUBMITTED
+                    case 5: //WEBKIT_NAVIGATION_TYPE_OTHER
+                        //$this->webkit->webkit_policy_decision_ignore($decision);
+                        break;
                 }
                 break;
             case 2: //WEBKIT_POLICY_DECISION_TYPE_RESPONSE
-                break;
+                $request = $this->webkit->webkit_response_policy_decision_get_request($decision);
+                $uri = $this->webkit->webkit_uri_request_get_uri($request);
+                $urls = parse_url($uri);
+                if ($urls['scheme'] != 'php') {
+                    return false;
+                }
+                $this->webkit->webkit_policy_decision_ignore($decision);
+                if (is_dir($urls['path'])) {
+                    $urls['path'] .= 'index.php';
+                }
+                $this->loadphp($urls['path'], $urls['query']);
+                $this->msg('respose:' . $uri . ' | path:' . $urls['path']);
+                return true;
         }
-        return 0;
+
+        return false;
     }
 
 
@@ -321,6 +522,8 @@ class webview
         unsigned int g_idle_add_full (int priority,GSourceFunc f,void*data,GDestroyNotify notify);
         unsigned int g_idle_add (GSourceFunc function,void* data);
         int g_source_remove (unsigned int tag);
+        void* g_error_new (uint32_t domain,int code,const char* format);
+        char* g_uri_unescape_string (const char* escaped_string,const char* illegal_characters);
         ', $lib[self::GLB]);
 
         $this->gobject = FFI::cdef(
@@ -333,6 +536,7 @@ class webview
         gulong g_signal_connect_data(void *instance,const char *detailed_signal,GCallback c_handler,void *data,GClosureNotify destroy_data,int connect_flags);
         void g_clear_object (void** object_ptr);
         void g_signal_emit_by_name(void* ins, const char* signal);
+        void g_object_set (void* object,const char* first_property_name,int p1, void* p2);
         ',
             $lib[self::GOBJECT]
         );
@@ -349,6 +553,9 @@ class webview
             void g_application_hold (void* application);
             void g_application_release (void* application);
             void g_action_activate (void* action, void* parameter);
+            typedef void (*GDestroyNotify)(void *data);
+            void* g_memory_input_stream_new_from_data (uint8_t* data,uint64_t len,GDestroyNotify destroy);
+
             ',
             $lib[self::GIO]
         );
@@ -386,6 +593,34 @@ class webview
             void* webkit_navigation_policy_decision_get_navigation_action (void* decision);
             int webkit_navigation_action_get_navigation_type (void* navigation);
             void webkit_policy_decision_ignore (void* decision);
+            const char* webkit_uri_request_get_uri (void* request);
+            void* webkit_navigation_action_get_request (void* navigation);
+            void* webkit_response_policy_decision_get_request (void* decision);
+            void* webkit_web_view_get_settings(void* web_view);
+            void webkit_settings_set_allow_file_access_from_file_urls (void* settings,int allowed);
+            void webkit_settings_set_allow_universal_access_from_file_urls (void* settings,int allowed);
+            typedef void (* WebKitURISchemeRequestCallback) (void* request,void* user_data);
+            typedef void (*GDestroyNotify)(void *data);
+            void* webkit_web_context_get_default ();
+            const char* webkit_uri_request_get_http_method(void* request);
+            const char* webkit_uri_request_get_uri (void* request);
+            void* webkit_uri_request_get_http_headers (void* request);
+            void webkit_web_context_register_uri_scheme (void* context, const char* scheme,WebKitURISchemeRequestCallback callback,void* user_data,GDestroyNotify user_data_destroy_func);
+            const char* webkit_uri_scheme_request_get_path(void* request);
+            const char* webkit_uri_scheme_request_get_uri (void* request);
+            void webkit_uri_request_set_uri(void* request, const char* uri);
+            void* webkit_uri_scheme_request_get_http_headers (void* request);
+            const char* webkit_uri_scheme_request_get_http_method (void* request);
+            void* webkit_uri_scheme_request_get_http_body ( void* request);
+            const char* webkit_uri_scheme_request_get_scheme (void* request);
+            uint64_t soup_message_headers_get_content_length (void* hdrs);
+            const char* soup_message_headers_get_content_type (void* hdrs,void** params);
+            void webkit_uri_scheme_request_finish(void* request,void* stream,int64_t stream_length,const char* content_type);
+            void webkit_uri_scheme_request_finish_error (void* request,void* error);
+            void webkit_uri_scheme_request_finish_with_response ( void* request,void* response);
+            uint32_t webkit_network_error_quark ();
+            void* webkit_web_view_get_inspector(void* webview);
+            void webkit_web_inspector_show (void* inspector);
 
             typedef enum {WEBKIT_CONTEXT_MENU_ACTION_NO_ACTION,WEBKIT_CONTEXT_MENU_ACTION_OPEN_LINK,WEBKIT_CONTEXT_MENU_ACTION_OPEN_LINK_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_LINK_TO_DISK,WEBKIT_CONTEXT_MENU_ACTION_COPY_LINK_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_OPEN_IMAGE_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_IMAGE_TO_DISK,WEBKIT_CONTEXT_MENU_ACTION_COPY_IMAGE_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_COPY_IMAGE_URL_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_OPEN_FRAME_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_GO_BACK,WEBKIT_CONTEXT_MENU_ACTION_GO_FORWARD,WEBKIT_CONTEXT_MENU_ACTION_STOP,WEBKIT_CONTEXT_MENU_ACTION_RELOAD,WEBKIT_CONTEXT_MENU_ACTION_COPY,WEBKIT_CONTEXT_MENU_ACTION_CUT,WEBKIT_CONTEXT_MENU_ACTION_PASTE,WEBKIT_CONTEXT_MENU_ACTION_DELETE,WEBKIT_CONTEXT_MENU_ACTION_SELECT_ALL,WEBKIT_CONTEXT_MENU_ACTION_INPUT_METHODS,WEBKIT_CONTEXT_MENU_ACTION_UNICODE,WEBKIT_CONTEXT_MENU_ACTION_SPELLING_GUESS,WEBKIT_CONTEXT_MENU_ACTION_NO_GUESSES_FOUND,WEBKIT_CONTEXT_MENU_ACTION_IGNORE_SPELLING,WEBKIT_CONTEXT_MENU_ACTION_LEARN_SPELLING,WEBKIT_CONTEXT_MENU_ACTION_IGNORE_GRAMMAR,WEBKIT_CONTEXT_MENU_ACTION_FONT_MENU,WEBKIT_CONTEXT_MENU_ACTION_BOLD,WEBKIT_CONTEXT_MENU_ACTION_ITALIC,WEBKIT_CONTEXT_MENU_ACTION_UNDERLINE,WEBKIT_CONTEXT_MENU_ACTION_OUTLINE,WEBKIT_CONTEXT_MENU_ACTION_INSPECT_ELEMENT,WEBKIT_CONTEXT_MENU_ACTION_OPEN_VIDEO_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_OPEN_AUDIO_IN_NEW_WINDOW,WEBKIT_CONTEXT_MENU_ACTION_COPY_VIDEO_LINK_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_COPY_AUDIO_LINK_TO_CLIPBOARD,WEBKIT_CONTEXT_MENU_ACTION_TOGGLE_MEDIA_CONTROLS,WEBKIT_CONTEXT_MENU_ACTION_TOGGLE_MEDIA_LOOP,WEBKIT_CONTEXT_MENU_ACTION_ENTER_VIDEO_FULLSCREEN,WEBKIT_CONTEXT_MENU_ACTION_MEDIA_PLAY,WEBKIT_CONTEXT_MENU_ACTION_MEDIA_PAUSE,WEBKIT_CONTEXT_MENU_ACTION_MEDIA_MUTE,WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_VIDEO_TO_DISK,WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_AUDIO_TO_DISK,WEBKIT_CONTEXT_MENU_ACTION_INSERT_EMOJI,WEBKIT_CONTEXT_MENU_ACTION_PASTE_AS_PLAIN_TEXT,WEBKIT_CONTEXT_MENU_ACTION_CUSTOM} WebKitContextMenuAction;
             ',
@@ -397,6 +632,9 @@ class webview
     {
         return $this->gtk->$name(...$arguments);
     }
+}
+if (PHP_SAPI != 'cli') {
+    throw new RuntimeException('webview only run on php CLI mode');
 }
 
 new webview($argc, $argv);
