@@ -116,7 +116,7 @@ class MCurl
         return $this->continue;
     }
 
-    public function run(callable $contentCall)
+    public function run(callable $contentCall, ...$argv)
     {
         $this->initConnect();
         do {
@@ -138,7 +138,7 @@ class MCurl
                         $this->changeState('complete', $requestInfo['url'], $requestInfo['http_code']);
                         if ($requestInfo['http_code'] == 200) {
                             $content = curl_multi_getcontent($info['handle']);
-                            $contentCall($content);
+                            $contentCall($content, ...$argv);
                             continue;
                         }
                     }
