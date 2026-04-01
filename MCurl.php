@@ -133,7 +133,7 @@ class MCurl
                     $this->pushConnect();
                     $requestInfo = curl_getinfo($info['handle']);
                     if ($info['result'] == CURLE_OK) {
-                        $this->changeState('close', $requestInfo['url'], $requestInfo['http_code']);
+                        $this->changeState('complete', $requestInfo['url'], $requestInfo['http_code']);
                         if ($requestInfo['http_code'] == 200) {
                             $content = curl_multi_getcontent($info['handle']);
                             $contentCall($content);
