@@ -22,6 +22,7 @@ class MCurl
         curl_multi_setopt($this->multi, CURLMOPT_MAX_HOST_CONNECTIONS, self::$maxHostConnect);
         curl_multi_setopt($this->multi, CURLMOPT_MAX_TOTAL_CONNECTIONS, self::$maxTotalConnect);
         $this->shellColumn = shell_exec('tput cols 2>/dev/null');
+        $this->continue = true;
     }
 
     public function error($url, string $error)
@@ -94,6 +95,7 @@ class MCurl
 
     private  function initConnect()
     {
+        $this->continue = true;
         $this->generator = $this->getGenerator();
         for ($i = 0; $i < self::$maxTotalConnect; $i++) {
             $this->pushConnect();
@@ -152,6 +154,10 @@ class MCurl
                 continue;
             }
         } while ($running);
+    }
+
+    public function __destruct()
+    {
         curl_multi_close($this->multi);
     }
 }
