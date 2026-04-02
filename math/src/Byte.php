@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Toknot (http://toknot.com)
  *
@@ -6,6 +7,7 @@
  * @license    http://toknot.com/LICENSE.txt New BSD License
  * @link       https://github.com/chopins/toknot
  */
+
 namespace Toknot\Math;
 
 use Toknot\Math\Math;
@@ -20,8 +22,9 @@ class Byte
     const EB             = '1152921504606846976';
     const ZB             = '1180591620717411303424';
     const YB             = '1208925819614629174706176';
+    const SIZE_MAP = [self::KB, self::MB, self::GB, self::TB, self::PB, self::EB, self::ZB, self::YB];
     const UNIT = ['K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
-    const ZHUNIT = ['K' =>'千', 'M' => '兆', 'G' => '吉', 'T' => '太', 'P' => '拍', 'E' => '艾', 'Z' => '泽' , 'Y' => '尧'];
+    const ZHUNIT = ['K' => '千', 'M' => '兆', 'G' => '吉', 'T' => '太', 'P' => '拍', 'E' => '艾', 'Z' => '泽', 'Y' => '尧'];
     public static $isZh = false;
 
     protected static function math(&$byte, $op)
@@ -31,46 +34,56 @@ class Byte
         return $rb;
     }
 
-    protected static function checkBase($base) {
-        if($base != 2 && $base != 10) {
+    protected static function checkBase($base)
+    {
+        if ($base != 2 && $base != 10) {
             throw new \Exception('base only 2 or 10');
         }
     }
 
     protected static function getBytes($unit = '', $base = 2)
     {
-        if(empty($unit)) {
+        if (empty($unit)) {
             return 1;
         }
         $unit = strtoupper($unit);
         if (false === ($idx = array_search($unit, self::UNIT, true))) {
             throw new \UnexpectedValueException("passed unknown byte unit '$unit'");
         }
-        if($base == 10) {
+        if ($base == 10) {
             return Math::pow(1000, $idx + 1);
         }
-        return constant(self::class ."::{$unit}B");
+        return constant(self::class . "::{$unit}B");
+    }
+
+    public static function toUnit(int $byte, $isIEC = true): string
+    {
+        foreach (self::SIZE_MAP as $i => $size) {
+            if ($byte <= $size) {
+                break;
+            }
+        }
+        $suffix = $isIEC ? 'iB' : 'B';
+        $unit = self::UNIT[$i];
+        $num = round($byte / $size, 2);
+        return $num . $unit . $suffix;
     }
 
     /**
      * convert byte number to human byte info
-     * 
+     *
      * <cod>
      * Byte::toHuman('21542121314', 2, ' '); //20吉字节 64兆字节 171千字节 866字节
      * </code>
-     * 
-     * @param number $byte
+     *
+     * @param int $byte
      * @param int $base	        base 10 is 1000 bytes, base 2 is 1024 bytes
-     * @param mixed $getString    passed false return array, else return string, is not bool will be set for boundary string
+     * @param bool $getString    passed false return array, else return string, is not bool will be set for boundary string
      * @param bool $isIEC	    true will use KiB, true use KB
-     * @return mixed	 if $getString is not false will return array, string otherwise
+     * @return string|array	 if $getString is not false will return array, string otherwise
      */
-    public static function toHuman($byte, $base = 2, $getString = false, $isIEC = true)
+    public static function toHuman(int $byte, int $base = 2, bool $getString = false, bool $isIEC = true): string|array
     {
-        $pb = $tb = $gb = $mb = $kb = 0;
-        if (!Math::isInteger($byte)) {
-            throw new \InvalidArgumentException('must give integer digital or integer string, donot pass float digital');
-        }
         self::checkBase($base);
         $res   = [];
         $start = count(self::UNIT) - 1;
@@ -80,16 +93,16 @@ class Byte
                 $res[self::UNIT[$i]] = self::math($byte, $defByte);
             }
         }
-        if($getString !== false) {
+        if ($getString !== false) {
             $var = '';
-            $prefix = $isIEC ? 'iB' : 'B';
-            $prefix = self::$isZh ? '字节' : $prefix;
+            $suffix = $isIEC ? 'iB' : 'B';
+            $suffix = self::$isZh ? '字节' : $suffix;
             $sep = \is_string($getString) ? $getString : '';
-            foreach($res as $u => $v) {
+            foreach ($res as $u => $v) {
                 $u = self::ZHUNIT[$u];
-                $var .= "{$v}{$u}{$prefix}{$sep}";
+                $var .= "{$v}{$u}{$suffix}{$sep}";
             }
-            return "{$var}{$byte}{$prefix}";
+            return "{$var}{$byte}{$suffix}";
         }
         $res['B']  = $byte;
         return $res;
@@ -97,14 +110,14 @@ class Byte
 
     /**
      * convert byte string to byte number
-     * 
+     *
      * <code>
      * echo Byte::toByte('2GB 32MB'); //2181038080
      * </code>
-     * 
+     *
      * @param  string  $string
      * @param  int      $base  value 2 is base 2 for 1024 bytes, 10 is base 10 for 1000 bytes
-     * @return number  
+     * @return number
      */
     public static function toByte($string, $base = 2)
     {
@@ -119,11 +132,11 @@ class Byte
         $end = count($unit) - 1;
         foreach ($number as $i => $v) {
             $numUnit = $unit[$i];
-            if($i != $end && empty($numUnit)) {
+            if ($i != $end && empty($numUnit)) {
                 throw new \UnexpectedValueException('give data size string of format error');
             }
             $bytes = self::getBytes($numUnit, $base);
-            $res = Math::add($res,Math::mul($v, $bytes));
+            $res = Math::add($res, Math::mul($v, $bytes));
         }
         return $res;
     }

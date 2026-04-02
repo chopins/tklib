@@ -22,7 +22,7 @@ class Math
 
     protected static function checkParameter($op1, $op2)
     {
-        if(!\is_numeric($op1) || !\is_numeric($op2)) {
+        if (!\is_numeric($op1) || !\is_numeric($op2)) {
             throw new \InvalidArgumentException("parameter (#1 $op1, #2$op2) must be numeric");
         }
     }
@@ -35,13 +35,13 @@ class Math
      */
     public static function isInteger($op1)
     {
-        if(!is_numeric($op1)) {
+        if (!is_numeric($op1)) {
             return false;
         }
-        if(is_float($op1)) {
+        if (is_float($op1)) {
             return false;
         }
-        if(strpos($op1, '.') !== false) {
+        if (strpos($op1, '.') !== false) {
             return false;
         }
         return true;
@@ -67,7 +67,7 @@ class Math
 
     public static function integerStrMaxLen($base = 10)
     {
-        if(!isset(self::$intMaxLen[$base])) {
+        if (!isset(self::$intMaxLen[$base])) {
             self::$intMaxLen[$base] = floor(PHP_INT_SIZE * 8 / log($base, 2));
         }
         return self::$intMaxLen[$base];
@@ -77,14 +77,14 @@ class Math
     {
         self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('comp', 'cmp');
-        if(!$f) {
+        if (!$f) {
             return $f($op1, $op2);
         }
-        if($op1 == $op2) {
+        if ($op1 == $op2) {
             return 0;
-        } elseif($op1 > $op2) {
+        } elseif ($op1 > $op2) {
             return 1;
-        } elseif($op1 < $op2) {
+        } elseif ($op1 < $op2) {
             return -1;
         }
     }
@@ -97,17 +97,17 @@ class Math
      */
     public static function checkMathFunc($func, $gmpFunc = null)
     {
-        if(!empty(self::$mathFunc[$func])) {
+        if (!empty(self::$mathFunc[$func])) {
             return self::$mathFunc[$func];
-        } elseif(isset(self::$mathFunc[$func]) && self::$mathFunc[$func] === false) {
+        } elseif (isset(self::$mathFunc[$func]) && self::$mathFunc[$func] === false) {
             return false;
         }
-        if(function_exists("bc{$func}")) {
+        if (function_exists("bc{$func}")) {
             self::$mathFunc[$func] = "bc{$func}";
             return self::$mathFunc[$func];
         }
 
-        if(function_exists("gmp_{$func}")) {
+        if (function_exists("gmp_{$func}")) {
             self::$mathFunc[$func] = $gmpFunc === null ? "gmp_{$func}" : "gmp_{$gmpFunc}";
             return self::$mathFunc[$func];
         }
@@ -118,11 +118,8 @@ class Math
     /**
      * product of $op1 and $op2
      *
-     * @param number $op1
-     * @param number $op2
-     * @return number
      */
-    public static function mul($op1, $op2)
+    public static function mul(int|float $op1, int|float $op2): int|float
     {
         self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('mul');
@@ -135,19 +132,19 @@ class Math
      * @param string $number
      * @return int
      */
-    public static function detectBase($number)
+    public static function detectBase($number): int
     {
         $prefix = substr($number, 0, 2);
-        if($prefix == '0x') {
+        if ($prefix == '0x') {
             return 16;
-        } elseif($prefix == '0b') {
+        } elseif ($prefix == '0b') {
             return 2;
-        } elseif(strpos($number, '0') === 0) {
+        } elseif (strpos($number, '0') === 0) {
             return 8;
         } else {
             $table = range('z', 'a');
-            foreach($table as $i => $k) {
-                if(strpos($number, $k) !== false) {
+            foreach ($table as $i => $k) {
+                if (strpos($number, $k) !== false) {
                     return 36 - $i;
                 }
             }
@@ -158,15 +155,12 @@ class Math
     /**
      * sum of $op1 and $op2
      *
-     * @param number $op1
-     * @param number $op2
-     * @return number
      */
-    public static function add($op1, $op2)
+    public static function add(int|float $op1, int|float $op2): int|float
     {
         self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('add');
-        if($f === false) {
+        if ($f === false) {
             return self::operIsBig($op1, $op2) ? self::decAdd($op1, $op2) : $op1 + $op2;
         } else {
             return $f($op1, $op2);
@@ -184,7 +178,7 @@ class Math
     {
         self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('sub');
-        if($f === false) {
+        if ($f === false) {
             return self::operIsBig($op1, $op2) ? self::decSub($op1, $op2) : $op1 - $op2;
         } else {
             return $f($op1, $op2);
@@ -194,15 +188,12 @@ class Math
     /**
      * Quotient of $op1 and $op2
      *
-     * @param number $op1
-     * @param number $op2
-     * @return number
      */
-    public static function div($op1, $op2)
+    public static function div(int|float $op1, int|float $op2): int|float
     {
         self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('div');
-        if($f == false) {
+        if ($f == false) {
             return self::operIsBig($op1, $op2) ? self::decDiv($op1, $op2) : $op1 / $op2;
         }
         return $f($op1, $op2);
@@ -219,7 +210,7 @@ class Math
     {
         self::checkParameter($op1, $op2);
         $f = self::checkMathFunc('mod');
-        if($f === false) {
+        if ($f === false) {
             return self::operIsBig($op1, $op2) ? self::decDiv($op1, $op2, $mod) : $op1 % $op2;
         }
         return $f($op1, $op2);
@@ -251,13 +242,13 @@ class Math
         self::checkParameter($left, $right);
         $f = self::checkMathFunc('and');
         $bignumber = $f || self::operIsBig($left, $right);
-        if($f) {
+        if ($f) {
             return $f($left, $right);
-        } elseif($bignumber) {
+        } elseif ($bignumber) {
             $len = self::bitLen($left, $right);
             return self::strBitOp($left, $right, $len, function ($l, $r) {
-                    return $l & $r;
-                });
+                return $l & $r;
+            });
         }
         return $left & $right;
     }
@@ -274,13 +265,13 @@ class Math
         self::checkParameter($left, $right);
         $f = self::checkMathFunc('or');
         $bignumber = $f || self::operIsBig($left, $right);
-        if($f) {
+        if ($f) {
             return $f($left, $right);
-        } elseif($bignumber) {
+        } elseif ($bignumber) {
             $len = self::bitLen($left, $right);
             return self::strBitOp($left, $right, $len, function ($l, $r) {
-                    return $l | $r;
-                });
+                return $l | $r;
+            });
         }
         return $left | $right;
     }
@@ -288,20 +279,16 @@ class Math
     /**
      * set bit
      *
-     * @param number $current   only decimal and hexadecimal number support
-     * @param int $index
-     * @param boolean $bitOn
-     * @return number
      */
-    public static function setbit($current, $index, $bitOn = true)
+    public static function setbit(int $current, int $index, bool $bitOn = true): int
     {
         $f = self::checkMathFunc('setbit');
         $bignumber = $f || self::isBigInt($current);
         $bit = $bitOn ? '1' : '0';
-        if($f) {
+        if ($f) {
             $gmpNumber = gmp_init($current);
-            return $f($gmpNumber, $bitIndex, $bitOn);
-        } elseif($bignumber) {
+            return $f($gmpNumber, $index, $bitOn);
+        } elseif ($bignumber) {
             $current = self::decHex($current);
             $len = strlen($current);
             $charoffset = $index / 4 + 2; //0x is perfix so add 2
@@ -320,15 +307,11 @@ class Math
 
     /**
      * remove bit
-     *
-     * @param number $current
-     * @param number $remove
-     * @return number
      */
-    public static function removebit($current, $remove)
+    public static function removebit(int $current, int $remove)
     {
-        $bignumber = $f || self::operIsBig($current, $remove);
-        if(!$bignumber) {
+        $bignumber = self::operIsBig($current, $remove);
+        if (!$bignumber) {
             return ~(~$current | $remove);
         }
         $maxlen = self::integerStrMaxLen(16);
@@ -336,7 +319,7 @@ class Math
         $r = ltrim(self::decHex($remove), '0x');
         $len = self::bitLen($c, $r);
         $res = '';
-        for($i = $maxlen; $i < $len; $i = $i + $maxlen) {
+        for ($i = $maxlen; $i < $len; $i = $i + $maxlen) {
             $less = $len - $i;
             $sublen = $less > $maxlen ? $maxlen : $less;
             $op1 = substr($c, -$i, $sublen);
@@ -354,11 +337,8 @@ class Math
     /**
      * Arbitrary Precision decimal add
      *
-     * @param number $op1   arbitrary decimal
-     * @param number $op2   arbitrary decimal
-     * @return number
      */
-    protected static function decAdd($op1, $op2)
+    protected static function decAdd(int|float $op1, int|float $op2): int|float
     {
         $op1 = (string) $op1;
         $op2 = (string) $op2;
@@ -368,14 +348,14 @@ class Math
         $looplen = $c1 > $c2 ? $c2 : $c1;
         $carry = 0;
         $res = '';
-        for($i = $maxlen; $i < $looplen; $i = $i + $maxlen) {
+        for ($i = $maxlen; $i < $looplen; $i = $i + $maxlen) {
             $less = $looplen - $i;
             $sublen = $less > $maxlen ? $maxlen : $less;
             $mop1 = substr($op1, -$i, $sublen);
             $mop2 = substr($op2, -$i, $sublen);
             $sum = $mop1 + $mop2 + $carry;
             $carry = substr($sum, -$maxlen, 1);
-            if(!$carry) {
+            if (!$carry) {
                 $carry = 0;
                 $sum = substr($sum, 1);
             }
@@ -394,13 +374,13 @@ class Math
         $looplen = $c1 > $c2 ? $c2 : $c1;
         $carry = 0;
         $res = '';
-        for($i = $maxlen; $i < $looplen; $i = $i + $maxlen) {
+        for ($i = $maxlen; $i < $looplen; $i = $i + $maxlen) {
             $less = $looplen - $i;
             $sublen = $less > $maxlen ? $maxlen : $less;
             $mop1 = substr($op1, -$i, $sublen);
             $mop2 = substr($op2, -$i, $sublen);
             $sub = $mop1 - $mop2 - $carry;
-            if($sub >= 0) {
+            if ($sub >= 0) {
                 $carry = 0;
             } else {
                 $carry = 1;
@@ -408,7 +388,7 @@ class Math
             }
             $res = $sub . $res;
         }
-        if($carry) {
+        if ($carry) {
             $res = '-' . $res;
         }
 
@@ -418,7 +398,7 @@ class Math
     protected static function decDiv($op1, $op2, &$mod = 0)
     {
         $big = self::isBigInt($op2);
-        if($big) {
+        if ($big) {
             throw new \OutOfRangeException('unsupport divider is big integer, number char length must less than PHP_INT_MAX of length');
         }
         $op1 = (string) $op1;
@@ -430,17 +410,17 @@ class Math
         $check = true;
         $mod = '';
         $res = '';
-        for($i = 0; $i < $c1; $i = $i + $maxlen) {
+        for ($i = 0; $i < $c1; $i = $i + $maxlen) {
             $nextlen = $maxlen - strlen($mod) + 1; //at least add one number
             $mop1 = $mod . substr($op1, $i, $nextlen);
             $dot = $mop1 / $op2;
             $res .= floor($dot);
             $mod = $mop1 % $op2;
-            if($mod == 0) {
+            if ($mod == 0) {
                 $mod == '';
             }
         }
-        if($mod == '') {
+        if ($mod == '') {
             $mod = 0;
         }
 
@@ -456,16 +436,16 @@ class Math
      */
     public static function base2dec($number, $base)
     {
-        if($base > 36) {
+        if ($base > 36) {
             throw new \OutOfRangeException('base must less 37');
         }
         $maxlen = self::integerStrMaxLen($base);
         $len = strlen($number);
-        if($maxlen >= $len) {
+        if ($maxlen >= $len) {
             return base_convert($number, $base, 10);
         }
         $sum = 0;
-        for($i = 0; $i < $len; $i++) {
+        for ($i = 0; $i < $len; $i++) {
             $one = self::BASE_TABLE[$number[$i]] * ($base ** ($len - 1 - $i));
             $sum = self::decAdd($sum, $one);
         }
@@ -481,19 +461,19 @@ class Math
      */
     public static function dec2base($number, $base)
     {
-        if($base > 36) {
+        if ($base > 36) {
             throw new \OutOfRangeException('base must less 37');
         }
         $len = self::isBigInt($number);
-        if(!len) {
+        if (!$len) {
             return base_convert($number, 10, $base);
         }
         $res = '';
         $gnumber = $number;
-        while(true) {
+        while (true) {
             $div = self::decDiv($gnumber, $base, $mod);
             $res .= self::BASE_TABLE[$mod];
-            if($mod == $gnumber) {
+            if ($mod == $gnumber) {
                 break;
             }
             $gnumber = $div;
@@ -511,19 +491,17 @@ class Math
     /**
      * convert a aribitrary decimal to hexadecimal
      *
-     * @param [type] $number
-     * @return number
      */
-    public static function decHex($number)
+    public static function decHex(int $number): int
     {
         $base = self::detectBase($number);
-        if($base == 16) {
-            if(strpos($number, '0x') === false) {
+        if ($base == 16) {
+            if (strpos($number, '0x') === false) {
                 $number .= '0x' . $number;
             }
             return $number;
         }
-        if($base === 10) {
+        if ($base === 10) {
             return '0x' . self::dec2base($number, 10);
         }
         throw new \InvalidArgumentException('give number is invaild decimal or hexadecimal');
@@ -539,10 +517,10 @@ class Math
         //$leftr  = strrev($left);
         //$rightr = strrev($right);
         $resr = '';
-        for($i = $maxlen; $i < $len; $i++) {
+        for ($i = $maxlen; $i < $len; $i++) {
             $lless = $llen - $i;
             $rless = $rlen - $i;
-            if($rless > $lless) {
+            if ($rless > $lless) {
                 $subless = $lless;
             } else {
                 $subless = $rless;
@@ -555,5 +533,4 @@ class Math
         }
         return '0x' . ltrim(strrev($resr), '0');
     }
-
 }

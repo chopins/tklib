@@ -4,6 +4,7 @@ namespace Toknot\Network;
 
 use CurlMultiHandle;
 use Generator;
+use Toknot\Math\Byte;
 
 class MCurl
 {
@@ -20,14 +21,21 @@ class MCurl
     private int $progressCount = 0;
     private int $totalUrl = 0;
     private $shellColumn = 0;
-
+    private string $downloadTotalSize = '0';
+    private int $downloadContentLength = 0;
     public function __construct()
     {
-        $this->multi = curl_multi_init();
-        curl_multi_setopt($this->multi, \CURLMOPT_MAX_HOST_CONNECTIONS, self::$maxHostConnect);
-        curl_multi_setopt($this->multi, \CURLMOPT_MAX_TOTAL_CONNECTIONS, self::$maxTotalConnect);
+        $this->multi = self::initCurlMulti();
         $this->shellColumn = shell_exec('tput cols 2>/dev/null');
         $this->continue = true;
+    }
+
+    protected static function initCurlMulti()
+    {
+        $multi = curl_multi_init();
+        curl_multi_setopt($multi, \CURLMOPT_MAX_HOST_CONNECTIONS, self::$maxHostConnect);
+        curl_multi_setopt($multi, \CURLMOPT_MAX_TOTAL_CONNECTIONS, self::$maxTotalConnect);
+        return $multi;
     }
 
     public function randomUA()
@@ -163,6 +171,178 @@ class MCurl
         }
         $this->continue = $this->generator->valid();
         return $this->continue;
+    }
+
+    protected function headCheckRange($url)
+    {
+        $acceptRanges = -1;
+        $headOk = 0;
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            \CURLOPT_USERAGENT => self::$userAgent,
+            \CURLOPT_NOBODY => true,
+            \CURLOPT_RETURNTRANSFER => true,
+            \CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$acceptRanges, &$headOk) {
+                if (stripos($header, 'HTTP/') === 0 && strpos($header, '200') > 0) {
+                    $headOk = 1;
+                }
+                if ($headOk && stripos($header, 'Accept-Ranges:') === 0) {
+                    if (stripos($header, 'none') > 0) {
+                        $acceptRanges = 0;
+                    } elseif (strpos($header, 'bytes') > 0) {
+                        $acceptRanges = 1;
+                    } else {
+                        throw new \RuntimeException("unknown http range unit in header: $header");
+                    }
+                }
+                if ($headOk && stripos($header, 'Content-Length:') === 0) {
+                    $this->downloadContentLength = trim(substr($headOk, strlen('Content-Length:')));
+                }
+            }
+        ]);
+        curl_exec($ch);
+        return $acceptRanges;
+    }
+
+    protected function progress($url, $writeSize, &$pretime)
+    {
+        $ntime = time();
+        $prec = round($writeSize / $this->downloadContentLength, 2) * 100;
+        $speed = Byte::toUnit(($writeSize / ($ntime - $pretime)) / 1024, 2, true);
+        $pretime = $ntime;
+        $downloadSize = Byte::toUnit($writeSize);
+        $this->downloadTotalSize;
+    }
+
+    protected function getCheckRange($url, $fp, &$contentLength = 0)
+    {
+        $ch = curl_init($url);
+        $acceptRanges = 0;
+        $currentDownload = 0;
+        $time = time();
+        $writeSize = 0;
+        curl_setopt_array($ch, [
+            \CURLOPT_USERAGENT => self::$userAgent,
+            \CURLOPT_RANGE => '0-0',
+            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$currentDownload, &$fp, $url, &$writeSize, &$time) {
+                if ($currentDownload) {
+                    $size = fwrite($fp, $data);
+                    $writeSize += $size;
+                    $this->progress($url, $writeSize, $time);
+                    return $size;
+                }
+                return strlen($data);
+            },
+            \CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$acceptRanges, &$currentDownload) {
+                if (stripos($header, 'HTTP/') === 0) {
+                    if (strpos($header, '206')) {
+                        $acceptRanges = 1;
+                    } else if (strpos($header, '200')) {
+                        $currentDownload = 1;
+                        $acceptRanges = 0;
+                    }
+                }
+                if ($acceptRanges && stripos($header, 'Content-Range:') === 0) {
+                    strtok($header, ' ');
+                    $unit = strtok(' ');
+                    if (strcasecmp($unit, 'bytes') !== 0) {
+                        throw new \RuntimeException("unknown http range unit in header: $header");
+                    }
+                    $rse =  strtok('/');
+                    if ($rse == '*') {
+                        throw new \RuntimeException("unknown http range offset in header: $header");
+                    }
+                    $size = strtok('/');
+                    if (is_numeric($size)) {
+                        $this->downloadContentLength = $size;
+                        $this->downloadTotalSize = Byte::toUnit($this->downloadContentLength);
+                    } else {
+                        throw new \RuntimeException("unknown http total range in header: $header");
+                    }
+                }
+                if (!$acceptRanges && stripos($header, 'Content-Length:') === 0) {
+                    $this->downloadContentLength = trim(substr($header, strlen('Content-Length:')));
+                    $this->downloadTotalSize = Byte::toUnit($this->downloadContentLength);
+                }
+            }
+        ]);
+        curl_exec($ch);
+        return $acceptRanges;
+    }
+
+    public function download($url, $outfile)
+    {
+        if ($outfile) {
+        }
+        $tmpfile = "$outfile." . md5(microtime());
+        $fp = fopen($tmpfile, 'wb+');
+
+        self::$userAgent = self::$userAgent ?? $this->randomUA();
+        $acceptRanges = $this->headCheckRange($url);
+        if ($acceptRanges != 1) {
+            $acceptRanges = $this->getCheckRange($url, $fp);
+        }
+        if (!$acceptRanges) {
+            return;
+        }
+        if (!$this->downloadContentLength) {
+            throw new \RuntimeException("unknown file size");
+        }
+        ftruncate($fp, $this->downloadContentLength);
+        $partLength = ceil($this->downloadContentLength / self::$maxHostConnect);
+        $downloadInfo = [];
+
+        for ($i = 0; $i < self::$maxHostConnect; $i++) {
+            $ch = curl_init($url);
+            $fp = fopen($tmpfile, 'rb+');
+            $startRange = $partLength * $i;
+            fseek($fp, $startRange, SEEK_SET);
+            if ($i === self::$maxHostConnect - 1) {
+                $endRnage = '';
+                $partLength = $this->downloadContentLength - $startRange;
+            } else {
+                $endRnage = $partLength * ($i + 1) - 1;
+            }
+            $downloadInfo[$i] = ['writeSize' => 0, 'partTotal' => $partLength, 'time' => time()];
+            curl_setopt_array($ch, [
+                \CURLOPT_USERAGENT => self::$userAgent,
+                \CURLOPT_RANGE => $startRange . '-' . $endRnage,
+                \CURLOPT_WRITEFUNCTION => function ($ch, $data) use ($fp, &$downloadInfo, $i, $url) {
+                    $size =  fwrite($fp, $data);
+                    $downloadInfo[$i]['writeSize'] += $size;
+                    $this->progress($url, $downloadInfo[$i]['writeSize'], $downloadInfo[$i]['time']);
+                    return $size;
+                }
+            ]);
+            if (($mr = curl_multi_add_handle($this->multi, $ch)) !== \CURLM_OK) {
+                $this->error($url, curl_multi_strerror($mr));
+                return false;
+            }
+        }
+        do {
+            $status = curl_multi_exec($this->multi, $running);
+            if ($status != \CURLM_OK) {
+                throw new \Exception(curl_multi_strerror(curl_multi_errno($this->multi)));
+            }
+            while (($info = curl_multi_info_read($this->multi)) !== false) {
+                if ($info['msg'] === \CURLMSG_DONE) {
+                    curl_multi_remove_handle($this->multi, $info['handle']);
+                    curl_close($info['handle']);
+                    $requestInfo = curl_getinfo($info['handle']);
+                    if ($info['result'] == \CURLE_OK) {
+                        if ($requestInfo['http_code'] == 200) {
+                            continue;
+                        }
+                    }
+                    $this->error($requestInfo['url'], curl_strerror($info['result']));
+                }
+            }
+            if ($running) {
+                if (curl_multi_select($this->multi, 0.1) === -1) {
+                    throw new \Exception(curl_multi_strerror(curl_multi_errno($this->multi)));
+                }
+            }
+        } while ($running);
     }
 
     public function run(callable $contentCall, ...$argv)
