@@ -1,9 +1,19 @@
 <?php
 
-use Toknot\Epoll;
-
 include_once __DIR__ . '/autoload.php';
-class webview
+
+if($argc > 2 && $argv[1] == 'GLOBAL_INCLUDE_FILE') {
+    if($argc == 4) {
+        parse_str($argv[3], $_GET);
+    }
+    include_once $argv[2];
+    exit;
+}
+
+if (PHP_SAPI != 'cli') {
+    throw new RuntimeException('webview only run on php CLI mode');
+}
+new class($argc, $argv)
 {
     private $gio;
     private $gobject;
@@ -36,6 +46,7 @@ class webview
     const EXEC_RELOAD = 3;
     const EXEC_RESTART = 4;
     const EXEC_NAVIGATION = 5;
+    const EXEC_PHP_FILE = 6;
     public static $DL_PATH_LIST = [self::GOBJECT => '', self::GIO => '', self::GTK => '', self::WEBKITGTK => '', self::GLB => ''];
     private static $reloadAction;
     private static $exitAction;
@@ -119,6 +130,8 @@ class webview
                             $this->requestQueryString = fread($r[0], $qlen['q']);
                         }
                         break;
+                    } else if($b == self::EXEC_PHP_FILE) {
+
                     }
                 }
                 usleep(10000);
@@ -173,7 +186,9 @@ class webview
                 return 0;
             }
             foreach (self::$fibers as $i => $fiber) {
-                $fiber->resume($i);
+                if($fiber->isSuspended()) {
+                    $fiber->resume($i);
+                }
             }
             $r = [$viewFp];
             $w = $e = null;
@@ -293,7 +308,7 @@ class webview
 
         // $this->webkit->webkit_settings_set_allow_universal_access_from_file_urls($webview_setting, TRUE);
         // $this->webkit->webkit_settings_set_allow_file_access_from_file_urls($webview_setting, TRUE);
-        $this->g_signal_connect($this->webview, 'resource-load-started', $this->loadWebResouce(...));
+        // $this->g_signal_connect($this->webview, 'resource-load-started', $this->loadWebResouce(...));
         $this->g_signal_connect($this->webview, 'context-menu', $this->webviewContextMenu(...), $app);
         $this->gtk_scrolled_window_set_child($scrolled_window, $this->webview);
         $this->gtk_window_set_child($window, $scrolled_window);
@@ -325,38 +340,30 @@ class webview
     public function loadPHPResource($request, $contentType, $path, $requestQueryString = '', $requestBody = '')
     {
         $this->msg("load php $path $requestQueryString");
-
         $fiber = new Fiber(function ($path, $requestQueryString = '', $requestBody = '') use ($request, $contentType) {
             list($rFp, $outFp) = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
             $pid = pcntl_fork();
             if ($pid == 0) {
-                $fd = getFdno($outFp);
-                $r = $this->cstd->dup2($fd, getFdno(STDOUT));
-                if ($r < 0) {
-                    throw new RuntimeException("Output Control Copy Error");
-                }
-
-                parse_str($requestQueryString, $_GET);
-                parse_str($requestBody, $_POST);
-                // $org = $this->cstd->executor_globals->current_execute_data;
-                // $this->cstd->executor_globals->current_execute_data = null;
-                include_once $path;
-                // $this->cstd->executor_globals->current_execute_data = $org;
-                stream_socket_shutdown($outFp, STREAM_SHUT_RDWR);
+                // $fd = getFdno($outFp);
+                // $r = $this->cstd->dup2($fd, getFdno(STDOUT));
+                // if ($r < 0) {
+                //     throw new RuntimeException("Output Control Copy Error");
+                // }
+                register_shutdown_function('stream_socket_shutdown', $outFp, STREAM_SHUT_RDWR);
+                passthru(PHP_BINARY . " " . __FILE__ . " GLOBAL_INCLUDE_FILE $path $requestQueryString");
                 exit;
             }
             do {
                 $epid = pcntl_waitpid($pid, $status, WNOHANG | WCONTINUED);
-                $idx = Fiber::suspend();
+                Fiber::suspend();
             } while (!$epid);
-            unset(self::$fibers[$idx]);
             $content = stream_get_contents($rFp);
             fclose($rFp);
             fclose($outFp);
             $this->php_scheme_request_set_content($content, $request, $contentType);
         });
         self::$fibers[] = $fiber;
-        $fiber->start($path, $requestQueryString, $requestBody);
+        return $fiber->start($path, $requestQueryString, $requestBody);
     }
 
     public function php_scheme_request_set_content($content, $request, $contentType)
@@ -632,9 +639,4 @@ class webview
     {
         return $this->gtk->$name(...$arguments);
     }
-}
-if (PHP_SAPI != 'cli') {
-    throw new RuntimeException('webview only run on php CLI mode');
-}
-
-new webview($argc, $argv);
+};
