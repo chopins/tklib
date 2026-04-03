@@ -23,6 +23,12 @@ class MCurl
     private $shellColumn = 0;
     private string $downloadTotalSize = '0';
     private int $downloadContentLength = 0;
+    private string $downloadUrl =  '';
+    private string $downloadTmpFile = '';
+    private string $downloadTraget = '';
+    private string $downloadTragetByURLPath = '';
+    private string $downloadAttachmentFilename = '';
+    private int $downloadFileIndex = 1;
     public function __construct()
     {
         $this->multi = self::initCurlMulti();
@@ -173,11 +179,11 @@ class MCurl
         return $this->continue;
     }
 
-    protected function headCheckRange($url)
+    protected function httpHeadCheckRange()
     {
         $acceptRanges = -1;
         $headOk = 0;
-        $ch = curl_init($url);
+        $ch = curl_init($this->downloadUrl);
         curl_setopt_array($ch, [
             \CURLOPT_USERAGENT => self::$userAgent,
             \CURLOPT_NOBODY => true,
@@ -185,8 +191,7 @@ class MCurl
             \CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$acceptRanges, &$headOk) {
                 if (stripos($header, 'HTTP/') === 0 && strpos($header, '200') > 0) {
                     $headOk = 1;
-                }
-                if ($headOk && stripos($header, 'Accept-Ranges:') === 0) {
+                } elseif ($headOk && stripos($header, 'Accept-Ranges:') === 0) {
                     if (stripos($header, 'none') > 0) {
                         $acceptRanges = 0;
                     } elseif (strpos($header, 'bytes') > 0) {
@@ -194,17 +199,38 @@ class MCurl
                     } else {
                         throw new \RuntimeException("unknown http range unit in header: $header");
                     }
-                }
-                if ($headOk && stripos($header, 'Content-Length:') === 0) {
+                } elseif ($headOk && stripos($header, 'Content-Length:') === 0) {
                     $this->downloadContentLength = trim(substr($headOk, strlen('Content-Length:')));
+                } elseif ($headOk && stripos($header, 'Content-Disposition:') === 0 && stripos($header, 'attachment;') === 0) {
+                    $this->parseHttpAttachementFilename($header);
                 }
+                return strlen($header);
             }
         ]);
         curl_exec($ch);
         return $acceptRanges;
     }
 
-    protected function progress($url, $writeSize, &$pretime)
+    public function parseHttpAttachementFilename($header)
+    {
+        strtok($header, ' ');
+        strtok(';');
+        $fnkey = strtok('=');
+        $filename = '';
+        if ($fnkey && strcasecmp($fnkey, 'filename') === 0) {
+            $filename =  rawurldecode(trim(strtok('='), "\n\r\s\t\v\0'\""));
+        } else if ($fnkey && strcasecmp($fnkey, 'filename*') === 0) {
+            $extvalue = trim(strtok('='), "\n\r\s\t\v\0'\"");
+            $exts = explode('\'', $extvalue, 3);
+            $filename = rawurldecode($exts[2]);
+            if (strcasecmp($exts[0], 'UTF-8') !== 0) {
+                $filename = mb_convert_encoding($filename, 'UTF-8', $exts[0]);
+            }
+        }
+        $this->downloadAttachmentFilename = $filename;
+    }
+
+    protected function progress($writeSize, &$pretime)
     {
         $ntime = time();
         $prec = round($writeSize / $this->downloadContentLength, 2) * 100;
@@ -214,35 +240,41 @@ class MCurl
         $this->downloadTotalSize;
     }
 
-    protected function getCheckRange($url, $fp, &$contentLength = 0)
+    protected function httpGetCheckRange($fp, $targetFp)
     {
-        $ch = curl_init($url);
+        $ch = curl_init($this->downloadUrl);
         $acceptRanges = 0;
-        $currentDownload = 0;
+        $downloadNow = 0;
         $time = time();
         $writeSize = 0;
         curl_setopt_array($ch, [
             \CURLOPT_USERAGENT => self::$userAgent,
             \CURLOPT_RANGE => '0-0',
-            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$currentDownload, &$fp, $url, &$writeSize, &$time) {
-                if ($currentDownload) {
+            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$downloadNow, $fp, &$writeSize, &$time) {
+                if ($downloadNow) {
                     $size = fwrite($fp, $data);
                     $writeSize += $size;
-                    $this->progress($url, $writeSize, $time);
+                    $this->progress($writeSize, $time);
                     return $size;
                 }
                 return strlen($data);
             },
-            \CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$acceptRanges, &$currentDownload) {
+            \CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$acceptRanges, &$downloadNow) {
                 if (stripos($header, 'HTTP/') === 0) {
                     if (strpos($header, '206')) {
                         $acceptRanges = 1;
                     } else if (strpos($header, '200')) {
-                        $currentDownload = 1;
+                        $downloadNow = 1;
                         $acceptRanges = 0;
                     }
-                }
-                if ($acceptRanges && stripos($header, 'Content-Range:') === 0) {
+                } elseif (
+                    !$this->downloadAttachmentFilename
+                    && ($downloadNow || $acceptRanges)
+                    && stripos($header, 'Content-Disposition:') === 0
+                    && stripos($header, 'attachment;') === 0
+                ) {
+                    $this->parseHttpAttachementFilename($header);
+                } elseif ($acceptRanges && stripos($header, 'Content-Range:') === 0) {
                     strtok($header, ' ');
                     $unit = strtok(' ');
                     if (strcasecmp($unit, 'bytes') !== 0) {
@@ -259,28 +291,102 @@ class MCurl
                     } else {
                         throw new \RuntimeException("unknown http total range in header: $header");
                     }
-                }
-                if (!$acceptRanges && stripos($header, 'Content-Length:') === 0) {
+                } elseif (!$acceptRanges && stripos($header, 'Content-Length:') === 0) {
                     $this->downloadContentLength = trim(substr($header, strlen('Content-Length:')));
                     $this->downloadTotalSize = Byte::toUnit($this->downloadContentLength);
                 }
             }
         ]);
         curl_exec($ch);
+        if ($downloadNow) {
+            $this->setTargetPath($targetFp);
+            $this->copyTmpfile($fp, $targetFp);
+        }
         return $acceptRanges;
     }
-
-    public function download($url, $outfile)
+    protected function addHttpRangeDownload($index, &$downloadInfo)
     {
-        if ($outfile) {
+        $fp = fopen($this->downloadTmpFile, 'rb+');
+        $ch = curl_init($this->downloadUrl);
+        fseek($fp, $downloadInfo[$index]['startRange'], SEEK_SET);
+        curl_setopt_array($ch, [
+            \CURLOPT_USERAGENT => self::$userAgent,
+            \CURLOPT_RANGE => $downloadInfo[$index]['startRange'] . '-' . $downloadInfo[$index]['endRange'],
+            \CURLOPT_PRIVATE => $index,
+            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use ($fp, &$downloadInfo, $index) {
+                $size =  fwrite($fp, $data);
+                $downloadInfo[$index]['writeSize'] += $size;
+                $this->progress($downloadInfo[$index]['writeSize'], $downloadInfo[$index]['time']);
+                return $size;
+            }
+        ]);
+        if (($mr = curl_multi_add_handle($this->multi, $ch)) !== \CURLM_OK) {
+            $this->error("add part $index error", curl_multi_strerror($mr));
+            return false;
         }
-        $tmpfile = "$outfile." . md5(microtime());
-        $fp = fopen($tmpfile, 'wb+');
+    }
+
+    public function openLockEx(&$file)
+    {
+        while (file_exists($file)) {
+            $file .= '.' . $this->downloadFileIndex;
+            $this->downloadFileIndex++;
+        }
+        $fp = fopen($file, 'x');
+        if (!$fp) {
+            throw new \RuntimeException("$file open error");
+        }
+        flock($fp, LOCK_EX);
+        return $fp;
+    }
+
+    protected function copyTmpfile($tmpFp, $targetFp)
+    {
+        fclose($tmpFp);
+        fclose($targetFp);
+        unlink($this->downloadTraget);
+        if (rename($this->downloadTmpFile, $this->downloadTraget)) {
+            $this->changeState("Save", $this->downloadTraget, 0);
+        }
+        return false;
+    }
+
+    protected function setTargetPath($targetFp)
+    {
+        if (!$this->downloadTraget && $this->downloadAttachmentFilename) {
+            $this->downloadTraget = getcwd() . '/' . $this->downloadAttachmentFilename;
+        }
+        if (!$this->downloadTraget) {
+            $this->downloadTraget = $this->downloadTragetByURLPath;
+        }
+        if (!$targetFp) {
+            $this->openLockEx($this->downloadTraget);
+        }
+    }
+
+    public function download(string $url, string $targetFile = '')
+    {
+        $this->downloadTotalSize = 0;
+        $this->downloadContentLength = 0;
+        $this->downloadAttachmentFilename = '';
+        $this->downloadTraget = $targetFile;
+        $this->downloadUrl = $url;
+        $tmpsuffix = md5(md5($url) . md5(microtime()));
+        $targetFp = null;
+        if (!$this->downloadTraget) {
+            $this->downloadTragetByURLPath = getcwd() . '/' . basename(parse_url($url, PHP_URL_PATH));
+            $this->downloadTmpFile = "$this->downloadTragetByURLPath.$tmpsuffix";
+        } else {
+            $this->downloadTmpFile = "{$this->downloadTraget}.$tmpsuffix";
+            $targetFp = $this->openLockEx($this->downloadTraget);
+        }
+
+        $tmpfileFp = $this->openLockEx($this->downloadTmpFile);
 
         self::$userAgent = self::$userAgent ?? $this->randomUA();
-        $acceptRanges = $this->headCheckRange($url);
+        $acceptRanges = $this->httpHeadCheckRange();
         if ($acceptRanges != 1) {
-            $acceptRanges = $this->getCheckRange($url, $fp);
+            $acceptRanges = $this->httpGetCheckRange($tmpfileFp, $targetFp);
         }
         if (!$acceptRanges) {
             return;
@@ -288,36 +394,22 @@ class MCurl
         if (!$this->downloadContentLength) {
             throw new \RuntimeException("unknown file size");
         }
-        ftruncate($fp, $this->downloadContentLength);
+        ftruncate($tmpfileFp, $this->downloadContentLength);
+        $this->setTargetPath($targetFp);
+
         $partLength = ceil($this->downloadContentLength / self::$maxHostConnect);
         $downloadInfo = [];
 
         for ($i = 0; $i < self::$maxHostConnect; $i++) {
-            $ch = curl_init($url);
-            $fp = fopen($tmpfile, 'rb+');
-            $startRange = $partLength * $i;
-            fseek($fp, $startRange, SEEK_SET);
-            if ($i === self::$maxHostConnect - 1) {
-                $endRnage = '';
-                $partLength = $this->downloadContentLength - $startRange;
-            } else {
-                $endRnage = $partLength * ($i + 1) - 1;
-            }
             $downloadInfo[$i] = ['writeSize' => 0, 'partTotal' => $partLength, 'time' => time()];
-            curl_setopt_array($ch, [
-                \CURLOPT_USERAGENT => self::$userAgent,
-                \CURLOPT_RANGE => $startRange . '-' . $endRnage,
-                \CURLOPT_WRITEFUNCTION => function ($ch, $data) use ($fp, &$downloadInfo, $i, $url) {
-                    $size =  fwrite($fp, $data);
-                    $downloadInfo[$i]['writeSize'] += $size;
-                    $this->progress($url, $downloadInfo[$i]['writeSize'], $downloadInfo[$i]['time']);
-                    return $size;
-                }
-            ]);
-            if (($mr = curl_multi_add_handle($this->multi, $ch)) !== \CURLM_OK) {
-                $this->error($url, curl_multi_strerror($mr));
-                return false;
+            $downloadInfo[$i]['startRange'] = $partLength * $i;
+            if ($i === self::$maxHostConnect - 1) {
+                $downloadInfo[$i]['endRange'] = '';
+                $partLength = $this->downloadContentLength - $downloadInfo[$i]['startRange'];
+            } else {
+                $downloadInfo[$i]['endRange'] = $partLength * ($i + 1) - 1;
             }
+            $this->addHttpRangeDownload($i, $downloadInfo);
         }
         do {
             $status = curl_multi_exec($this->multi, $running);
@@ -329,12 +421,16 @@ class MCurl
                     curl_multi_remove_handle($this->multi, $info['handle']);
                     curl_close($info['handle']);
                     $requestInfo = curl_getinfo($info['handle']);
+                    $doneCurlIndex = curl_getinfo($info['handle'], CURLINFO_PRIVATE);
                     if ($info['result'] == \CURLE_OK) {
                         if ($requestInfo['http_code'] == 200) {
                             continue;
                         }
                     }
-                    $this->error($requestInfo['url'], curl_strerror($info['result']));
+                    $downloadInfo[$doneCurlIndex]['writeSize'] = 0;
+                    $downloadInfo[$doneCurlIndex]['time'] = time();
+                    $this->addHttpRangeDownload($doneCurlIndex, $downloadInfo);
+                    $this->error("part $doneCurlIndex", curl_strerror($info['result']));
                 }
             }
             if ($running) {
@@ -343,6 +439,7 @@ class MCurl
                 }
             }
         } while ($running);
+        return $this->copyTmpfile($tmpfileFp, $targetFp);
     }
 
     public function run(callable $contentCall, ...$argv)
