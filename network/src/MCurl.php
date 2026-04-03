@@ -262,13 +262,14 @@ class MCurl
         $totalDuration = $ntime - $this->downloadStartTime;
         $suffix = ($totalPercent * 100) ."%|$downTotal/$this->downloadTotalHumanSize $speed/s";
         $progresslen = $this->shellColumn - strlen($suffix) - self::$maxHostConnect * 2;
-        $blockCnt = floor($progresslen / self::$maxHostConnect);
+        $blockLen = floor($progresslen / self::$maxHostConnect);
         $mod = $progresslen % self::$maxHostConnect;
         $msg = "\r";
         for ($i = 0; $i < self::$maxHostConnect; $i++) {
-            $completed = str_repeat(' ', $blockCnt * $downloadInfo[$index]['percent']);
+            $completedLen = floor($blockLen * $downloadInfo[$index]['percent']);
+            $completed = str_repeat(' ', $completedLen);
             $msg .= '[' . Console::colorString($completed, Console::STYLE_BG_COLOR_GREEN);
-            $pending = str_repeat('-', $blockCnt * (1 - $downloadInfo[$index]['percent']));
+            $pending = str_repeat('-', $blockLen - $completedLen);
             $msg .= Console::colorString($pending, Console::STYLE_COLOR_YELLOW) . ']';
         }
         $msg .= str_repeat(' ', $mod) . $suffix;
