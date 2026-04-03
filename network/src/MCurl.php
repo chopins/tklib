@@ -23,6 +23,7 @@ class MCurl
     private $shellColumn = 0;
     private string $downloadTotalSize = '0';
     private int $downloadContentLength = 0;
+    private int $downloadPartCnt = 1;
     private string $downloadUrl =  '';
     private string $downloadTmpFile = '';
     private string $downloadTraget = '';
@@ -230,13 +231,13 @@ class MCurl
         $this->downloadAttachmentFilename = $filename;
     }
 
-    protected function progress($writeSize, &$pretime)
+    protected function progress(int $index, array &$downloadInfo)
     {
         $ntime = time();
-        $prec = round($writeSize / $this->downloadContentLength, 2) * 100;
-        $speed = Byte::toUnit(($writeSize / ($ntime - $pretime)) / 1024, 2, true);
-        $pretime = $ntime;
-        $downloadSize = Byte::toUnit($writeSize);
+        $prec = round($downloadInfo[$index]['writeSize'] / $this->downloadContentLength, 2) * 100;
+        $speed = Byte::toUnit(($downloadInfo[$index]['writeSize'] / ($ntime - $downloadInfo[$index]['time'])) / 1024, 2, true);
+        $downloadInfo[$index]['time'] = $ntime;
+        $downloadSize = Byte::toUnit($downloadInfo[$index]['writeSize']);
         $this->downloadTotalSize;
     }
 
@@ -245,16 +246,15 @@ class MCurl
         $ch = curl_init($this->downloadUrl);
         $acceptRanges = 0;
         $downloadNow = 0;
-        $time = time();
-        $writeSize = 0;
+        $downloadInfo = [['writeSize' => 0, 'partTotal' => &$this->downloadContentLength, 'time' => time(), 'endRange' => '', 'startRange' => 0]];
         curl_setopt_array($ch, [
             \CURLOPT_USERAGENT => self::$userAgent,
             \CURLOPT_RANGE => '0-0',
-            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$downloadNow, $fp, &$writeSize, &$time) {
+            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$downloadNow, $fp, &$downloadInfo) {
                 if ($downloadNow) {
                     $size = fwrite($fp, $data);
-                    $writeSize += $size;
-                    $this->progress($writeSize, $time);
+                    $downloadInfo[0]['writeSize'] += $size;
+                    $this->progress(0, $downloadInfo);
                     return $size;
                 }
                 return strlen($data);
@@ -316,7 +316,7 @@ class MCurl
             \CURLOPT_WRITEFUNCTION => function ($ch, $data) use ($fp, &$downloadInfo, $index) {
                 $size =  fwrite($fp, $data);
                 $downloadInfo[$index]['writeSize'] += $size;
-                $this->progress($downloadInfo[$index]['writeSize'], $downloadInfo[$index]['time']);
+                $this->progress($index, $downloadInfo);
                 return $size;
             }
         ]);
