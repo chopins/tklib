@@ -5,6 +5,7 @@ namespace Toknot\Network;
 use CurlMultiHandle;
 use Generator;
 use Toknot\Math\Byte;
+use Toknot\Process\Console;
 
 class MCurl
 {
@@ -21,9 +22,9 @@ class MCurl
     private int $progressCount = 0;
     private int $totalUrl = 0;
     private $shellColumn = 0;
-    private string $downloadTotalSize = '0';
+    private string $downloadTotalHumanSize = '0';
     private int $downloadContentLength = 0;
-    private int $downloadPartCnt = 1;
+    private int $downloadStartTime = 0;
     private string $downloadUrl =  '';
     private string $downloadTmpFile = '';
     private string $downloadTraget = '';
@@ -202,6 +203,7 @@ class MCurl
                     }
                 } elseif ($headOk && stripos($header, 'Content-Length:') === 0) {
                     $this->downloadContentLength = trim(substr($headOk, strlen('Content-Length:')));
+                    $this->downloadTotalHumanSize = Byte::toUnit($this->downloadContentLength);
                 } elseif ($headOk && stripos($header, 'Content-Disposition:') === 0 && stripos($header, 'attachment;') === 0) {
                     $this->parseHttpAttachementFilename($header);
                 }
@@ -209,6 +211,10 @@ class MCurl
             }
         ]);
         curl_exec($ch);
+        if (!$headOk) {
+            $this->error($this->downloadUrl, curl_getinfo($ch, CURLINFO_HTTP_CODE));
+        }
+        curl_close($ch);
         return $acceptRanges;
     }
 
@@ -233,25 +239,54 @@ class MCurl
 
     protected function progress(int $index, array &$downloadInfo)
     {
+        static $pretime = 0;
         $ntime = time();
-        $prec = round($downloadInfo[$index]['writeSize'] / $this->downloadContentLength, 2) * 100;
-        $speed = Byte::toUnit(($downloadInfo[$index]['writeSize'] / ($ntime - $downloadInfo[$index]['time'])) / 1024, 2, true);
+        if($pretime + 1 >= $ntime) {
+            return;
+        }
+        $pretime = $ntime;
+        $duration = $ntime - $downloadInfo[$index]['time'];
+        if ($duration <= 0) {
+            $duration = 1;
+        }
+
+        $downloadInfo[$index]['percent'] = round($downloadInfo[$index]['writeSize'] / $downloadInfo[$index]['chunkLen'], 1);
+        $downloadInfo[$index]['speed'] = $downloadInfo[$index]['writeSize'] / $duration;
+
         $downloadInfo[$index]['time'] = $ntime;
-        $downloadSize = Byte::toUnit($downloadInfo[$index]['writeSize']);
-        $this->downloadTotalSize;
+        //$humanSize = Byte::toUnit($downloadInfo[$index]['writeSize']);
+        $downTotalSize = array_sum(array_column($downloadInfo, 'writeSize'));
+        $totalPercent = round($downTotalSize / $this->downloadContentLength, 1);
+        $downTotal = Byte::toUnit($downTotalSize, false);
+        $speed = Byte::toUnit(array_sum(array_column($downloadInfo, 'speed')), false);
+        $totalDuration = $ntime - $this->downloadStartTime;
+        $suffix = ($totalPercent * 100) ."%|$downTotal/$this->downloadTotalHumanSize $speed/s";
+        $progresslen = $this->shellColumn - strlen($suffix) - self::$maxHostConnect * 2;
+        $blockCnt = floor($progresslen / self::$maxHostConnect);
+        $mod = $progresslen % self::$maxHostConnect;
+        $msg = "\r";
+        for ($i = 0; $i < self::$maxHostConnect; $i++) {
+            $completed = str_repeat(' ', $blockCnt * $downloadInfo[$index]['percent']);
+            $msg .= '[' . Console::colorString($completed, Console::STYLE_BG_COLOR_GREEN);
+            $pending = str_repeat('-', $blockCnt * (1 - $downloadInfo[$index]['percent']));
+            $msg .= Console::colorString($pending, Console::STYLE_COLOR_YELLOW) . ']';
+        }
+        $msg .= str_repeat(' ', $mod) . $suffix;
+        echo $msg;
     }
 
     protected function httpGetCheckRange($fp, $targetFp)
     {
         $ch = curl_init($this->downloadUrl);
         $acceptRanges = 0;
-        $downloadNow = 0;
-        $downloadInfo = [['writeSize' => 0, 'partTotal' => &$this->downloadContentLength, 'time' => time(), 'endRange' => '', 'startRange' => 0]];
+        $startDownload = 0;
+        $downloadInfo = [['writeSize' => 1, 'chunkLen' => &$this->downloadContentLength, 'time' => time(), 'endRange' => '', 'startRange' => 0, 'speed' => 0, 'percent' => 0]];
         curl_setopt_array($ch, [
             \CURLOPT_USERAGENT => self::$userAgent,
+            \CURLOPT_FOLLOWLOCATION => 1,
             \CURLOPT_RANGE => '0-0',
-            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$downloadNow, $fp, &$downloadInfo) {
-                if ($downloadNow) {
+            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$startDownload, $fp, &$downloadInfo) {
+                if ($startDownload) {
                     $size = fwrite($fp, $data);
                     $downloadInfo[0]['writeSize'] += $size;
                     $this->progress(0, $downloadInfo);
@@ -259,46 +294,47 @@ class MCurl
                 }
                 return strlen($data);
             },
-            \CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$acceptRanges, &$downloadNow) {
+            \CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$acceptRanges, &$startDownload) {
                 if (stripos($header, 'HTTP/') === 0) {
                     if (strpos($header, '206')) {
                         $acceptRanges = 1;
                     } else if (strpos($header, '200')) {
-                        $downloadNow = 1;
+                        $startDownload = 1;
                         $acceptRanges = 0;
+                        self::$maxHostConnect = 1;
+                        $this->changeState("Download", $this->downloadUrl, 200);
                     }
                 } elseif (
                     !$this->downloadAttachmentFilename
-                    && ($downloadNow || $acceptRanges)
+                    && ($startDownload || $acceptRanges)
                     && stripos($header, 'Content-Disposition:') === 0
                     && stripos($header, 'attachment;') === 0
                 ) {
                     $this->parseHttpAttachementFilename($header);
                 } elseif ($acceptRanges && stripos($header, 'Content-Range:') === 0) {
                     strtok($header, ' ');
-                    $unit = strtok(' ');
-                    if (strcasecmp($unit, 'bytes') !== 0) {
+                    if (strcasecmp(strtok(' '), 'bytes') !== 0) {
                         throw new \RuntimeException("unknown http range unit in header: $header");
                     }
-                    $rse =  strtok('/');
-                    if ($rse == '*') {
+                    if (strtok('/') == '*') {
                         throw new \RuntimeException("unknown http range offset in header: $header");
                     }
                     $size = strtok('/');
                     if (is_numeric($size)) {
                         $this->downloadContentLength = $size;
-                        $this->downloadTotalSize = Byte::toUnit($this->downloadContentLength);
+                        $this->downloadTotalHumanSize = Byte::toUnit($this->downloadContentLength);
                     } else {
                         throw new \RuntimeException("unknown http total range in header: $header");
                     }
                 } elseif (!$acceptRanges && stripos($header, 'Content-Length:') === 0) {
                     $this->downloadContentLength = trim(substr($header, strlen('Content-Length:')));
-                    $this->downloadTotalSize = Byte::toUnit($this->downloadContentLength);
+                    $this->downloadTotalHumanSize = Byte::toUnit($this->downloadContentLength);
                 }
+                return strlen($header);
             }
         ]);
         curl_exec($ch);
-        if ($downloadNow) {
+        if ($startDownload) {
             $this->setTargetPath($targetFp);
             $this->copyTmpfile($fp, $targetFp);
         }
@@ -309,11 +345,28 @@ class MCurl
         $fp = fopen($this->downloadTmpFile, 'rb+');
         $ch = curl_init($this->downloadUrl);
         fseek($fp, $downloadInfo[$index]['startRange'], SEEK_SET);
+        $startDownload = 0;
         curl_setopt_array($ch, [
             \CURLOPT_USERAGENT => self::$userAgent,
+            \CURLOPT_FOLLOWLOCATION => 1,
             \CURLOPT_RANGE => $downloadInfo[$index]['startRange'] . '-' . $downloadInfo[$index]['endRange'],
             \CURLOPT_PRIVATE => $index,
-            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use ($fp, &$downloadInfo, $index) {
+            \CURLOPT_HEADERFUNCTION => function ($ch, $header) use (&$startDownload) {
+                if (stripos($header, 'HTTP/') === 0 && stripos($header, '206')) {
+                    strtok($header, ' ');
+                    $code = trim(strtok(' '));
+                    if ($code == 206) {
+                        $startDownload = 1;
+                    } else if ($code >= 400) {
+                        $this->error($this->downloadUrl, $header);
+                    }
+                }
+                return strlen($header);
+            },
+            \CURLOPT_WRITEFUNCTION => function ($ch, $data) use ($fp, &$downloadInfo, $index, &$startDownload) {
+                if (!$startDownload) {
+                    return strlen($data);
+                }
                 $size =  fwrite($fp, $data);
                 $downloadInfo[$index]['writeSize'] += $size;
                 $this->progress($index, $downloadInfo);
@@ -321,7 +374,7 @@ class MCurl
             }
         ]);
         if (($mr = curl_multi_add_handle($this->multi, $ch)) !== \CURLM_OK) {
-            $this->error("add part $index error", curl_multi_strerror($mr));
+            $this->error("add part $index", curl_multi_strerror($mr));
             return false;
         }
     }
@@ -364,13 +417,24 @@ class MCurl
         }
     }
 
+    protected function registerCleanTmpFile()
+    {
+        register_shutdown_function(function() {
+            if ($this->downloadTmpFile && file_exists($this->downloadTmpFile)) {
+                unlink($this->downloadTmpFile);
+            }
+        });
+    }
+
     public function download(string $url, string $targetFile = '')
     {
-        $this->downloadTotalSize = 0;
+
+        $this->downloadTotalHumanSize = '';
         $this->downloadContentLength = 0;
         $this->downloadAttachmentFilename = '';
         $this->downloadTraget = $targetFile;
         $this->downloadUrl = $url;
+        $this->downloadStartTime = time();
         $tmpsuffix = md5(md5($url) . md5(microtime()));
         $targetFp = null;
         if (!$this->downloadTraget) {
@@ -380,7 +444,7 @@ class MCurl
             $this->downloadTmpFile = "{$this->downloadTraget}.$tmpsuffix";
             $targetFp = $this->openLockEx($this->downloadTraget);
         }
-
+        $this->registerCleanTmpFile();
         $tmpfileFp = $this->openLockEx($this->downloadTmpFile);
 
         self::$userAgent = self::$userAgent ?? $this->randomUA();
@@ -397,17 +461,17 @@ class MCurl
         ftruncate($tmpfileFp, $this->downloadContentLength);
         $this->setTargetPath($targetFp);
 
-        $partLength = ceil($this->downloadContentLength / self::$maxHostConnect);
+        $chunkLength = ceil($this->downloadContentLength / self::$maxHostConnect);
         $downloadInfo = [];
 
         for ($i = 0; $i < self::$maxHostConnect; $i++) {
-            $downloadInfo[$i] = ['writeSize' => 0, 'partTotal' => $partLength, 'time' => time()];
-            $downloadInfo[$i]['startRange'] = $partLength * $i;
+            $downloadInfo[$i] = ['writeSize' => 1, 'chunkLen' => &$chunkLength, 'time' => time(), 'speed' => 0, 'percent' => 0];
+            $downloadInfo[$i]['startRange'] = $chunkLength * $i;
             if ($i === self::$maxHostConnect - 1) {
                 $downloadInfo[$i]['endRange'] = '';
-                $partLength = $this->downloadContentLength - $downloadInfo[$i]['startRange'];
+                $chunkLength = $this->downloadContentLength - $downloadInfo[$i]['startRange'];
             } else {
-                $downloadInfo[$i]['endRange'] = $partLength * ($i + 1) - 1;
+                $downloadInfo[$i]['endRange'] = $chunkLength * ($i + 1) - 1;
             }
             $this->addHttpRangeDownload($i, $downloadInfo);
         }
@@ -423,14 +487,14 @@ class MCurl
                     $requestInfo = curl_getinfo($info['handle']);
                     $doneCurlIndex = curl_getinfo($info['handle'], CURLINFO_PRIVATE);
                     if ($info['result'] == \CURLE_OK) {
-                        if ($requestInfo['http_code'] == 200) {
+                        if ($requestInfo['http_code'] == 206) {
                             continue;
                         }
                     }
                     $downloadInfo[$doneCurlIndex]['writeSize'] = 0;
                     $downloadInfo[$doneCurlIndex]['time'] = time();
                     $this->addHttpRangeDownload($doneCurlIndex, $downloadInfo);
-                    $this->error("part $doneCurlIndex", curl_strerror($info['result']));
+                    $this->error("Part:$doneCurlIndex", $requestInfo['http_code']);
                 }
             }
             if ($running) {
