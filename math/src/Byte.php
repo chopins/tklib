@@ -60,6 +60,11 @@ class Byte
     {
         foreach (self::SIZE_MAP as $i => $size) {
             if ($byte <= $size) {
+                $i--;
+                if($i < 0) {
+                    $i = 0;
+                }
+                $size = self::SIZE_MAP[$i];
                 break;
             }
         }
