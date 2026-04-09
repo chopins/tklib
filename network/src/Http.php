@@ -451,11 +451,16 @@ class HTTP
      * @var array
      */
     private static array $defaultObjVars = [];
+    protected static array $funcName;
 
     private function __construct()
     {
         self::$isCLI = PHP_SAPI == 'cli';
         self::$requestBodyType = HttpContentType::TEXT;
+        self::$funcName = [];
+        foreach(['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'SHOW', 'SAVE'] as $v) {
+            self::$funcName[$v] = __NAMESPACE__ . '\\' . $v;
+        }
         $this->checkRun(false);
         self::$defaultObjVars = get_object_vars($this);
         $this->color();
@@ -1251,7 +1256,7 @@ class HTTP
 
     protected function checkRunNew(bool $unparse = true): bool
     {
-        $funcName = ['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'SHOW', 'SAVE'];
+
         if ($unparse) {
             if (self::$forceRun) {
                 return true;
@@ -1263,11 +1268,12 @@ class HTTP
             }
             $callline = 0;
             foreach ($trace as $t) {
-                if (isset($t['function']) && in_array($t['function'], $funcName)) {
+                if (isset($t['function']) && in_array($t['function'], self::$funcName)) {
                     $callline = $t['line'];
                     break;
                 }
             }
+
             if (!$callline) {
                 return false;
             }
@@ -1284,6 +1290,7 @@ class HTTP
             }
             return false;
         }
+
         $files = get_included_files();
 
         foreach ($files as $f) {
@@ -1302,7 +1309,7 @@ class HTTP
                     $runShowFlagLines = $token[2];
                 } else if (is_array($token) && $token[0] == T_COMMENT && $token[1] == self::$runTag) {
                     $runFlagLines = $token[2];
-                } else if (is_array($token) && $token[0] === T_STRING && in_array($token[1], $funcName)) {
+                } else if (is_array($token) && $token[0] === T_STRING && isset(self::$funcName[$token[1]])) {
                     if (!$runFlagLines && !$runShowFlagLines) {
                         continue;
                     }
@@ -1321,6 +1328,7 @@ class HTTP
                 }
             }
         }
+
         return false;
     }
     public function parseToken($tokens, $i) {}
