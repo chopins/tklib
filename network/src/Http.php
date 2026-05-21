@@ -458,7 +458,7 @@ class HTTP
         self::$isCLI = PHP_SAPI == 'cli';
         self::$requestBodyType = HttpContentType::TEXT;
         self::$funcName = [];
-        foreach(['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'SHOW', 'SAVE'] as $v) {
+        foreach (['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'SHOW', 'SAVE'] as $v) {
             self::$funcName[$v] = __NAMESPACE__ . '\\' . $v;
         }
         $this->checkRun(false);
@@ -850,7 +850,6 @@ class HTTP
         }
 
         $this->responseBody = curl_exec($this->curl);
-
         $this->getCurlInfo();
         if ($this->httpCode === 0) {
             $this->getNetworkError();
@@ -1281,11 +1280,9 @@ class HTTP
             $this->enableShow = false;
             if (isset(self::$runShowFlagLines[$callline])) {
                 $this->enableShow = true;
-                unset(self::$runShowFlagLines[$callline]);
                 return true;
             }
             if (isset(self::$runFlagLines[$callline])) {
-                unset(self::$runFlagLines[$callline]);
                 return true;
             }
             return false;
