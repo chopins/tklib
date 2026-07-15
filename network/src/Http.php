@@ -46,20 +46,21 @@ class Response
     ) {}
 }
 
-function RUN()
+function RUN(): HTTP
 {
     return HTTP::init()->run();
 }
 /**
- * @param callable():Response $call
+ * @param callable(...$params):Response $call
+ * @param $params[]
  */
-function SHOW(callable $call, ...$params)
+function SHOW(callable $call, array ...$params): HTTP
 {
     $obj = HTTP::init();
     $obj->show($call, $params);
     return $obj;
 }
-function SAVE(string $path, string $save = '', string |array $query = '')
+function SAVE(string $path, string $save = '', string |array $query = ''): HTTP
 {
     $obj = HTTP::init();
     $obj->save($path, $query, $save);
@@ -72,7 +73,7 @@ function SAVE(string $path, string $save = '', string |array $query = '')
  *
  * @return HTTP
  */
-function GET(string $path, string|array $query = '', string|array $data = '')
+function GET(string $path, string|array $query = '', string|array $data = ''): HTTP
 {
     $obj = HTTP::init();
     if ($data) {
@@ -89,7 +90,7 @@ function GET(string $path, string|array $query = '', string|array $data = '')
  *
  * @return HTTP
  */
-function PUT(string $path, mixed $file, string|array $query = '')
+function PUT(string $path, mixed $file, string|array $query = ''): HTTP
 {
     $obj = HTTP::init();
     $type = gettype($file);
@@ -109,7 +110,7 @@ function PUT(string $path, mixed $file, string|array $query = '')
  *
  * @return HTTP
  */
-function POST(string $path, string|array $data = '', string|array $query = '')
+function POST(string $path, string|array $data = '', string|array $query = ''): HTTP
 {
     $obj = HTTP::init();
     $obj->post($path, $data, $query);
@@ -121,7 +122,7 @@ function POST(string $path, string|array $data = '', string|array $query = '')
  *
  * @return HTTP
  */
-function DELETE(string $path, string|array $query = '')
+function DELETE(string $path, string|array $query = ''): HTTP
 {
     $obj = HTTP::init();
     $obj->delete($path, $query);
@@ -133,7 +134,7 @@ function DELETE(string $path, string|array $query = '')
  *
  * @return HTTP
  */
-function HEAD(string $path, string|array $query = '')
+function HEAD(string $path, string|array $query = ''): HTTP
 {
     $obj = HTTP::init();
     $obj->head($path, $query);
@@ -146,7 +147,7 @@ function HEAD(string $path, string|array $query = '')
  *
  * @return HTTP
  */
-function OPTIONS(string $path, string|array $query = '')
+function OPTIONS(string $path, string|array $query = ''): HTTP
 {
     $obj = HTTP::init();
     $obj->options($path, $query);
@@ -159,7 +160,7 @@ function OPTIONS(string $path, string|array $query = '')
  *
  * @return HTTP
  */
-function TRACE(string $path, string|array $query = '')
+function TRACE(string $path, string|array $query = ''): HTTP
 {
     $obj = HTTP::init();
     $obj->trace($path, $query);
@@ -231,7 +232,7 @@ class HTTP
     public static array $defaultPostArgs = [];
 
     /**
-     * @var string|\HttpContentType 请求时发送的body数据类型
+     * @var string|HttpContentType 请求时发送的body数据类型
      */
     public static string|HttpContentType $requestBodyType;
     /**
@@ -467,8 +468,6 @@ class HTTP
     }
 
     /**
-     * @param string $host
-     *
      * @return HTTP
      */
     public static function init(string $runTag = '', string $runShowTag = ''): HTTP
@@ -487,7 +486,7 @@ class HTTP
         return self::$obj;
     }
 
-    public function reset()
+    public function reset(): void
     {
         self::$forceRun = false;
         foreach (self::$defaultObjVars as $k => $v) {
@@ -582,7 +581,7 @@ class HTTP
         return $this->request();
     }
 
-    protected function getSaveFileInfo($ch, $h, &$save, &$notRange)
+    protected function getSaveFileInfo(?CurlHandle $ch, string $h, string &$save, bool &$notRange)
     {
         if (stripos($h, 'HTTP/') === 0) {
             list(, $httpCode) = explode(' ', $h);
@@ -626,6 +625,7 @@ class HTTP
             $this->currentCurlOptions[CURLOPT_RANGE] = "0-";
         }
         $notRange = false;
+        $headStatus = false;
         if (!$save) {
             $this->head($path, $query);
             $headStatus = ($this->httpCode > 100 && $this->httpCode < 300);
@@ -740,9 +740,10 @@ class HTTP
     }
 
     /**
-     * @param Response $call
+     * @param callable(...$params):Response $call
+     * @param array $params
      */
-    public function show(callable $call, $params = []): HTTP
+    public function show(callable $call, array $params = []): HTTP
     {
         $this->isrun = $this->checkRun();
         if (!$this->isrun) {
@@ -937,7 +938,7 @@ class HTTP
         }
     }
 
-    public function getResposeJsonBody($associative = true)
+    public function getResposeJsonBody($associative = true): string|bool
     {
         if ($this->isJson) {
             return json_decode($this->responseBody, $associative);
@@ -976,7 +977,7 @@ class HTTP
     }
 
     /**
-     * @param HTTP::callable $callable
+     * @param-closure-this HTTP $callable
      * @param mixed ...$args
      */
     public function then(callable $callable, ...$args): HTTP
@@ -1328,8 +1329,6 @@ class HTTP
 
         return false;
     }
-    public function parseToken($tokens, $i) {}
-
 
     public function showArrayTable(Traversable|array $array): void
     {
@@ -1374,7 +1373,7 @@ class HTTP
         }
     }
 
-    public static function file($filename, $filemime = null): CURLFile
+    public static function file(string $filename, ?string $filemime = null): CURLFile
     {
         $mime = mime_content_type($filename);
         if (!$mime && !$filemime) {
@@ -1421,7 +1420,7 @@ class HTTP
         }
     }
 
-    public function htmlPage()
+    public function htmlPage(): void
     {
         if (PHP_SAPI == 'cli' && !self::$isWebview) {
             return;
