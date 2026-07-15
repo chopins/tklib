@@ -51,10 +51,12 @@ function RUN(): HTTP
     return HTTP::init()->run();
 }
 /**
+ * 显示一个Response， 需要 run 标签才会运行并显示
+ *
  * @param callable(...$params):Response $call
  * @param $params[]
  */
-function SHOW(callable $call, array ...$params): HTTP
+function SHOW(callable $call, ...$params): HTTP
 {
     $obj = HTTP::init();
     $obj->show($call, $params);
@@ -772,11 +774,7 @@ class HTTP
         $this->url = $this->response->url;
         $this->responseBody = $this->response->body;
         $this->getResposeType($this->response->contentType);
-
-        if ($this->enableShow) {
-            return $this->view();
-        }
-        return $this;
+        return $this->view();
     }
 
     protected function request(): HTTP
@@ -938,7 +936,7 @@ class HTTP
         }
     }
 
-    public function getResposeJsonBody($associative = true): string|bool
+    public function getResposeJsonBody($associative = true): array|string|bool
     {
         if ($this->isJson) {
             return json_decode($this->responseBody, $associative);
